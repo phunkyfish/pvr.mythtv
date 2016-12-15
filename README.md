@@ -1,26 +1,24 @@
 [![Build Status](https://travis-ci.org/janbar/pvr.mythtv.svg?branch=master)](https://travis-ci.org/janbar/pvr.mythtv)
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/3115/badge.svg)](https://scan.coverity.com/projects/3115)
 
-# MythTV PVR
-MythTV PVR client addon for [Kodi](http://kodi.tv)
 
-## Build instructions
-When building the addon you have to use the correct branch depending on which version of Kodi you're building against.
-For example, if you're building the `master` branch of Kodi you should checkout the `master` branch of this repository. Also make sure you follow this README from the branch in question.
+### Linux, BSD, OSX
 
-### Linux
+Start by creating a build folder
+<pre><code>mkdir -p build
+rm -rf build/*
+cd build/</code></pre>
 
-    git clone --branch=master --depth=1 https://github.com/xbmc/xbmc.git
-    git clone --branch=master https://github.com/janbar/pvr.mythtv.git
-    cd pvr.mythtv && mkdir build && cd build
-    cmake -DADDONS_TO_BUILD=pvr.mythtv -DADDON_SRC_PREFIX=../.. -DCMAKE_BUILD_TYPE=Debug \
-    -DCMAKE_INSTALL_PREFIX=../../xbmc/addons -DPACKAGE_ZIP=ON ../../xbmc/cmake/addons
-    make
+To build PVR addon execute the following:
+<pre><code>cmake -DCMAKE_BUILD_TYPE=Release -DPACKAGE_ZIP=ON ../
+make</code></pre>
 
-The addon files will be placed in `../../xbmc/kodi-build/addons` so if you build Kodi from source and run it directly
-the addon will be available as a system addon.
+Finally generate the individual ZIP archive (which can then be installed manually): 
+<pre><code>make package</code></pre>
 
-##### Useful links
+### Windows
 
-* [Kodi's PVR user support](http://forum.kodi.tv/forumdisplay.php?fid=170)
-* [Kodi's PVR development support](http://forum.kodi.tv/forumdisplay.php?fid=136)
+Run cmake GUI and create the VC project in a dedicated folder.
+Open the generated solution ```pvr.mythtv.sln``` in Visual C++, then generate the target ```BUILDALL```.
+Finally generate the target ```PACKAGE``` to create the individual ZIP archive.
+
