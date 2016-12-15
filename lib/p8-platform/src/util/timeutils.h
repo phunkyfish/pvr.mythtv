@@ -77,22 +77,30 @@ namespace P8PLATFORM
 
   inline int64_t GetTimeMs()
   {
-  #if defined(__APPLE__)
-    return (int64_t) (CVGetCurrentHostTime() / (int64_t)(CVGetHostClockFrequency() * 0.001));
-  #elif defined(__WINDOWS__)
+#if defined(__APPLE__)
+    // Recommended by Apple's QA1398.
+    int64_t ticks = 0;
+    static mach_timebase_info_data_t timebase;
+    // Get the timebase if this is the first time we run.
+    if (timebase.denom == 0)
+      (void)mach_timebase_info(&timebase);
+    // Use timebase to convert absolute time tick units into nanoseconds.
+    ticks = mach_absolute_time() * timebase.numer / timebase.denom;
+    return ticks / 1000000;
+#elif defined(__WINDOWS__)
     LARGE_INTEGER tickPerSecond;
     LARGE_INTEGER tick;
     if (QueryPerformanceFrequency(&tickPerSecond))
     {
       QueryPerformanceCounter(&tick);
-      return (int64_t) (tick.QuadPart / (tickPerSecond.QuadPart / 1000.));
+      return (int64_t) (tick.QuadPart / (tickPerSecond.QuadPart / 1000.0));
     }
     return -1;
-  #else
+#else
     timespec time;
     clock_gettime(CLOCK_MONOTONIC, &time);
     return (int64_t)time.tv_sec * 1000 + time.tv_nsec / 1000000;
-  #endif
+#endif
   }
 
   template <class T>

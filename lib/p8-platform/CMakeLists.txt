@@ -9,15 +9,16 @@ find_package(Threads REQUIRED)
 include(CheckAtomic.cmake)
 
 set(p8-platform_NAME p8-platform)
-set(p8-platform_DESCRIPTION "Platform support library")
-set(p8-platform_VERSION_MAJOR 1)
-set(p8-platform_VERSION_MINOR 0)
-set(p8-platform_VERSION_PATCH 10)
+set(p8-platform_DESCRIPTION "Pulse-Eight platform support library")
+set(p8-platform_VERSION_MAJOR 2)
+set(p8-platform_VERSION_MINOR 1)
+set(p8-platform_VERSION_PATCH 0)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE on)
 
 if(WIN32)
-  set(PLAT_SOURCES src/windows/dlfcn-win32.cpp
+  set(PLAT_SOURCES src/windows/CharsetConverter.cpp
+                   src/windows/dlfcn-win32.cpp
                    src/windows/os-threads.cpp)
 endif()
 
@@ -29,17 +30,16 @@ set(p8-platform_LIBRARIES ${CMAKE_THREAD_LIBS_INIT})
 
 if(NOT ${CORE_SYSTEM_NAME} STREQUAL "")
   if(${CORE_SYSTEM_NAME} STREQUAL "osx" OR ${CORE_SYSTEM_NAME} STREQUAL "ios")
-    list(APPEND p8-platform_LIBRARIES "-framework CoreVideo -framework IOKit")
+    list(APPEND p8-platform_LIBRARIES "-framework CoreVideo")
   endif()
 endif()
 
-set(SOURCES src/util/fstrcmp.c
-            src/util/StringUtils.cpp)
+set(SOURCES src/util/StringUtils.cpp)
 
 add_library(p8-platform STATIC ${SOURCES} ${PLAT_SOURCES})
 target_link_libraries(p8-platform ${p8-platform_LIBRARIES})
 set_target_properties(p8-platform PROPERTIES VERSION ${p8-platform_VERSION_MAJOR}.${p8-platform_VERSION_MINOR}.${p8-platform_VERSION_PATCH}
-                                              SOVERSION ${p8-platform_VERSION_MAJOR}.0)
+                                              SOVERSION ${p8-platform_VERSION_MAJOR})
 
 #
 # Install required headers from p8-platform
