@@ -421,7 +421,8 @@ void Demux::populate_pvr_streams()
   int mainType = XBMC_CODEC_TYPE_UNKNOWN;
   std::vector<XbmcPvrStream> new_streams;
   const std::vector<TSDemux::ElementaryStream*> es_streams = m_AVContext->GetStreams();
-  for (std::vector<TSDemux::ElementaryStream*>::const_iterator it = es_streams.begin(); it != es_streams.end(); it++)
+  int count = 0;
+  for (std::vector<TSDemux::ElementaryStream*>::const_iterator it = es_streams.begin(); it != es_streams.end(); ++it)
   {
     const char* codec_name = (*it)->GetStreamCodecName();
     xbmc_codec_t codec = CODEC->GetCodecByName(codec_name);
