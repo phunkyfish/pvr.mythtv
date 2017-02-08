@@ -1,3 +1,8 @@
+v4.13.1
+- New setting to show/hide liveTV recordings
+- Fix: Do not open dialog while playing
+- Fix french translations
+
 v4.12.12
 - Sync cppmyth upstream (2.9.4)
 
