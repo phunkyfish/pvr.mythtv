@@ -1,3 +1,6 @@
+v4.13.2
+- Launch client init in background
+
 v4.13.1
 - New setting to show/hide liveTV recordings
 - Fix: Do not open dialog while playing
