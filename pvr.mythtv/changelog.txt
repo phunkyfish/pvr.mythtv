@@ -1,3 +1,6 @@
+v4.14.1
+- Fix install path for debian build
+
 v4.14.0
 - No longer handle demuxing
 
