@@ -1,3 +1,6 @@
+v4.15.0
+- Add new setting to enable/disable usage of backend bookmarks
+
 v4.14.1
 - Fix install path for debian build
 
