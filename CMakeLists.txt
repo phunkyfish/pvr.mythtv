@@ -9,11 +9,10 @@ enable_language(C)
 
 find_package(kodi REQUIRED)
 find_package(kodiplatform REQUIRED)
-find_package(p8-platform REQUIRED)
 
 include_directories(${kodiplatform_INCLUDE_DIRS}
-                    ${p8-platform_INCLUDE_DIRS}
                     ${KODI_INCLUDE_DIR}
+                    ${CMAKE_BINARY_DIR}/include
                     ${PROJECT_SOURCE_DIR}/lib/cppmyth/src)
 
 add_definitions(-DUSE_DEMUX -D__STDC_FORMAT_MACROS)
@@ -28,6 +27,7 @@ file (GLOB MYTHTV_SOURCES
   src/*.cpp src/*.h)
 
 add_subdirectory(lib/cppmyth)
+add_subdirectory(lib/p8-platform)
 
 set(DEPLIBS ${p8-platform_LIBRARIES} cppmyth)
 if(WIN32)
