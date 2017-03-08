@@ -132,6 +132,14 @@ msgctxt "#30034"
 msgid "Allow recordings to expire"
 msgstr "Zezwalaj na przedawnianie nagrań"
 
+msgctxt "#30047"
+msgid "Prompt to delete the watched recording"
+msgstr "Potwierdzaj usunięcie obejrzanych nagrań"
+
+msgctxt "#30048"
+msgid "Show 'Original Airdate' instead of 'Recording Time'"
+msgstr "Pokazuj datę pierwszej emisji zamiast daty nagrania"
+
 msgctxt "#30049"
 msgid "Recording template"
 msgstr "Szablon nagrywania"
@@ -139,6 +147,10 @@ msgstr "Szablon nagrywania"
 msgctxt "#30050"
 msgid "Advanced"
 msgstr "Zaawansowane"
+
+msgctxt "#30051"
+msgid "Preferences"
+msgstr "Preferencje"
 
 msgctxt "#30052"
 msgid "Enable demuxing MPEG-TS"
@@ -195,6 +207,10 @@ msgstr "Pokazuj fototapety i miniatury nagrań"
 msgctxt "#30065"
 msgid "Limit channel tuning attempts"
 msgstr "Ograniczaj próby dostrajania kanału"
+
+msgctxt "#30066"
+msgid "Show inactive upcomings (alternative/recorded/expired)"
+msgstr "Pokazuj nieaktywne zadania (inne/nagrane/przeterminowane)"
 
 msgctxt "#30100"
 msgid "Protocol version: %i - Database version: %i"
@@ -273,12 +289,12 @@ msgid "Delete and re-record"
 msgstr "Skasuj i nagraj ponownie "
 
 msgctxt "#30412"
-msgid "Keep LiveTV recording"
-msgstr "Zachowaj nagranie telewizyjne"
+msgid "Keep recording"
+msgstr "Zachowuj nagranie"
 
 msgctxt "#30421"
-msgid "Show/hide inactive upcomings"
-msgstr "Pokazuj/Ukrywaj nieaktywne nadchodzące emisje"
+msgid "Toggle display of alternative/recorded/expired"
+msgstr "Przełącz widok inne/nagrane/przeterminowane"
 
 msgctxt "#30422"
 msgid "Refresh cache for channel icons"
@@ -286,7 +302,7 @@ msgstr "Odśwież bufor ikon kanałów"
 
 msgctxt "#30423"
 msgid "Trigger channels update"
-msgstr "Uruchamiaj aktualizację kanałów"
+msgstr "Wymuszaj aktualizację kanałów"
 
 msgctxt "#30424"
 msgid "Show status of scheduling"
@@ -315,6 +331,18 @@ msgstr "Manualnie nadchodzące"
 msgctxt "#30456"
 msgid "Zombie"
 msgstr "Zombie"
+
+msgctxt "#30457"
+msgid "Alternative"
+msgstr "Inne"
+
+msgctxt "#30458"
+msgid "Currently recorded"
+msgstr "Aktualnie nagrywane"
+
+msgctxt "#30459"
+msgid "Expired recording"
+msgstr "Nagranie przeterminowane"
 
 msgctxt "#30460"
 msgid "Manual"
@@ -351,6 +379,10 @@ msgstr "Wyszukaj wg klucza"
 msgctxt "#30468"
 msgid "Search people"
 msgstr "Wyszukaj wg osób"
+
+msgctxt "#30469"
+msgid "Rule disabled"
+msgstr "Reguła nieaktywna"
 
 msgctxt "#30501"
 msgid "Don't match duplicates"

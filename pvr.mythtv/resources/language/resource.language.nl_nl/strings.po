@@ -132,6 +132,10 @@ msgctxt "#30034"
 msgid "Allow recordings to expire"
 msgstr "Sta opnames toe te expireren"
 
+msgctxt "#30048"
+msgid "Show 'Original Airdate' instead of 'Recording Time'"
+msgstr "Toon 'Orginele uitzenddatum' in plaats van 'opnametijd'"
+
 msgctxt "#30049"
 msgid "Recording template"
 msgstr "Opname template"
@@ -273,12 +277,12 @@ msgid "Delete and re-record"
 msgstr "Verwijder en her-opnemen"
 
 msgctxt "#30412"
-msgid "Keep LiveTV recording"
-msgstr "Behoud LiveTV opname"
+msgid "Keep recording"
+msgstr "Behoud opname"
 
 msgctxt "#30421"
-msgid "Show/hide inactive upcomings"
-msgstr "Toon/Verberg inactief programmering"
+msgid "Toggle display of alternative/recorded/expired"
+msgstr "Schakel scherm van alternatie;/opgenomen/verlopen"
 
 msgctxt "#30422"
 msgid "Refresh cache for channel icons"
@@ -316,6 +320,18 @@ msgctxt "#30456"
 msgid "Zombie"
 msgstr "Zombie"
 
+msgctxt "#30457"
+msgid "Alternative"
+msgstr "Alternatief"
+
+msgctxt "#30458"
+msgid "Currently recorded"
+msgstr "Huidig opgenomen"
+
+msgctxt "#30459"
+msgid "Expired recording"
+msgstr "Verlopen opname"
+
 msgctxt "#30460"
 msgid "Manual"
 msgstr "Handmatig"
@@ -351,6 +367,10 @@ msgstr "Zoek op trefwoord"
 msgctxt "#30468"
 msgid "Search people"
 msgstr "Zoek personen"
+
+msgctxt "#30469"
+msgid "Rule disabled"
+msgstr "Regel gedeactiveerd"
 
 msgctxt "#30501"
 msgid "Don't match duplicates"

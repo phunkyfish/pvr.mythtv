@@ -132,6 +132,14 @@ msgctxt "#30034"
 msgid "Allow recordings to expire"
 msgstr "Povoliť expiráciu nahrávok"
 
+msgctxt "#30047"
+msgid "Prompt to delete the watched recording"
+msgstr "Ponúkni vymazanie pozretej nahrávky"
+
+msgctxt "#30048"
+msgid "Show 'Original Airdate' instead of 'Recording Time'"
+msgstr "Zobraziť 'Pôvodný čas vysielania' namiesto 'Čas nahrávania'"
+
 msgctxt "#30049"
 msgid "Recording template"
 msgstr "Šablóna nahrávky"
@@ -139,6 +147,10 @@ msgstr "Šablóna nahrávky"
 msgctxt "#30050"
 msgid "Advanced"
 msgstr "Pokročilé"
+
+msgctxt "#30051"
+msgid "Preferences"
+msgstr "Preferencie"
 
 msgctxt "#30052"
 msgid "Enable demuxing MPEG-TS"
@@ -195,6 +207,10 @@ msgstr "Aktivovať náhľad/fanart nahrávok"
 msgctxt "#30065"
 msgid "Limit channel tuning attempts"
 msgstr "Obmedziť počet pokusov o ladenie kanálu"
+
+msgctxt "#30066"
+msgid "Show inactive upcomings (alternative/recorded/expired)"
+msgstr "Zobraz neaktívne nadchádzajúce (alternatívne/nahraté/vypršané)"
 
 msgctxt "#30100"
 msgid "Protocol version: %i - Database version: %i"
@@ -273,12 +289,12 @@ msgid "Delete and re-record"
 msgstr "Vymazať a znova nahrať"
 
 msgctxt "#30412"
-msgid "Keep LiveTV recording"
-msgstr "Ponechať nahrávky LiveTV"
+msgid "Keep recording"
+msgstr "Ponechať nahrávku"
 
 msgctxt "#30421"
-msgid "Show/hide inactive upcomings"
-msgstr "Zobraziť/skryť neaktívne nadchádzajúce udalosti"
+msgid "Toggle display of alternative/recorded/expired"
+msgstr "Prepnúť zobrazenie alternatívnych/nahratých/vypršaných"
 
 msgctxt "#30422"
 msgid "Refresh cache for channel icons"
@@ -316,6 +332,18 @@ msgctxt "#30456"
 msgid "Zombie"
 msgstr "Zombia"
 
+msgctxt "#30457"
+msgid "Alternative"
+msgstr "Alternatívne"
+
+msgctxt "#30458"
+msgid "Currently recorded"
+msgstr "Aktuálne nahrané"
+
+msgctxt "#30459"
+msgid "Expired recording"
+msgstr "Vypršaná nahrávka"
+
 msgctxt "#30460"
 msgid "Manual"
 msgstr "Manuálne"
@@ -351,6 +379,10 @@ msgstr "Hľadať kľúčové slovo"
 msgctxt "#30468"
 msgid "Search people"
 msgstr "Hľadať ľudí"
+
+msgctxt "#30469"
+msgid "Rule disabled"
+msgstr "Pravidlo zakázané"
 
 msgctxt "#30501"
 msgid "Don't match duplicates"

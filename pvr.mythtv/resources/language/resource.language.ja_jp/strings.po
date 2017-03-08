@@ -238,7 +238,7 @@ msgstr "録画しない"
 
 msgctxt "#30310"
 msgid "Enabled"
-msgstr "LCD有効"
+msgstr "有効"
 
 msgctxt "#30311"
 msgid "Disabled"
@@ -251,10 +251,6 @@ msgstr "放送が見つかりません"
 msgctxt "#30411"
 msgid "Delete and re-record"
 msgstr "削除して再録画"
-
-msgctxt "#30412"
-msgid "Keep LiveTV recording"
-msgstr "テレビ放送の録画をつづける"
 
 msgctxt "#30460"
 msgid "Manual"

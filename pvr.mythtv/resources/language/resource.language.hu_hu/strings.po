@@ -273,12 +273,8 @@ msgid "Delete and re-record"
 msgstr "Törlés és újra-felvétel"
 
 msgctxt "#30412"
-msgid "Keep LiveTV recording"
-msgstr "LiveTV felvétel folyamatosan"
-
-msgctxt "#30421"
-msgid "Show/hide inactive upcomings"
-msgstr "Inaktív hamarosan érkezők mutatása/elrejtése"
+msgid "Keep recording"
+msgstr "Felvétel megtartása"
 
 msgctxt "#30422"
 msgid "Refresh cache for channel icons"

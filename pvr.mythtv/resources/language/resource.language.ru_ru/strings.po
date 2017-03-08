@@ -273,12 +273,8 @@ msgid "Delete and re-record"
 msgstr "Удалить и перезаписать"
 
 msgctxt "#30412"
-msgid "Keep LiveTV recording"
-msgstr "Сохранять запись ТВ"
-
-msgctxt "#30421"
-msgid "Show/hide inactive upcomings"
-msgstr "Показывать/скрыть не активные входящие"
+msgid "Keep recording"
+msgstr "Сохранять запись"
 
 msgctxt "#30422"
 msgid "Refresh cache for channel icons"

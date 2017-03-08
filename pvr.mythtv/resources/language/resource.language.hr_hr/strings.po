@@ -273,12 +273,8 @@ msgid "Delete and re-record"
 msgstr "Obriši i ponovno snimi"
 
 msgctxt "#30412"
-msgid "Keep LiveTV recording"
-msgstr "Nastavi snimanje TV programa"
-
-msgctxt "#30421"
-msgid "Show/hide inactive upcomings"
-msgstr "Prikaži/Sakrij neaktivne nadolazeće"
+msgid "Keep recording"
+msgstr "Nastavi snimanje"
 
 msgctxt "#30422"
 msgid "Refresh cache for channel icons"
