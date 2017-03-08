@@ -1,3 +1,22 @@
+v3.5.0
+- Updated language files from Transifex
+- Fix install path for debian build
+- No longer handle demuxing
+- New setting to show/hide liveTV recordings
+- Sync cppmyth upstream (2.9.4)
+- Fill flag 'has bookmark' on recordings
+- An option to prompt to delete a recording after finishing it
+- Adding new section 'Preferences' in settings
+- Add a dialog to retry connect the backend on startup
+- Replaced custom Dialog class with standard Kodi API call
+- Handle recording last played position from the backend
+- Bookmark at current position in a recording when you press record on LiveTV
+- New setting to send (original) Airdate to Kodi instead of the recording's Start Date/Time.
+- Recordings: Separate Thumbnail from Icon
+- Allow to keep live show from EPG screen
+- Keep original air date of recording on update event from protocol
+- Allowing to disable auto-expire for any recording
+
 v3.4.19
 - Allow to keep live show from EPG screen
 
