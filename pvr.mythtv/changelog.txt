@@ -1,3 +1,7 @@
+v4.15.2
+- Sync cppmyth upstream (2.9.5)
+- Fix bug in http chunked data transfer
+
 v4.15.0
 - Add new setting to enable/disable usage of backend bookmarks
 
