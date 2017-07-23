@@ -1,3 +1,6 @@
+v4.15.3
+- Discard upcoming with an invalid channel
+
 v4.15.2
 - Sync cppmyth upstream (2.9.5)
 - Fix bug in http chunked data transfer
