@@ -12,7 +12,7 @@
   <script src="./bootstrap/js/bootstrap.js"></script>
 
 </head>
-  <body id="index">
+  <body id="manual" data-spy="scroll" data-target="#navcolumn" data-offset="100">
     
     <div class="navbar navbar-inverse navbar-fixed-top">
       <div class="navbar-inner">
@@ -25,11 +25,9 @@
         <a class="brand" href="./index.html">PVR.MythTV</a>
         <div class="nav-collapse collapse">
           <ul class="nav">
-            <li ><a href="./download/index.html">Download</a></li>
-            <li ><a href="./manual/index.html">Manual</a></li>
             <li><a href="https://github.com/janbar/pvr.mythtv/issues">Issues</a></li>
-            <li><a href="https://github.com/janbar/pvr.mythtv">Source</a></li>
-            <li><a href="https://github.com/janbar?tab=activity">NEWS</a></li>
+            <li><a href="https://github.com/janbar/pvr.mythtv/releases">Releases</a></li>
+            <li><a href="https://janbar.github.io/cppmyth/">CPPMyth</a></li>
           </ul>
         </div>
       </div>
@@ -38,21 +36,54 @@
 
     <div class="container">
       <div class="row">
-        <div class="hero-unit">
-          <img src="./icon.png" style="width: 120px; height: 120px; float: left; margin-right: 20px">
-          <div id="blurb">
-            <p>MythTV addon for XBMC~Kodi mediacenter</p>
+        <div class="span3" id="navcolumn">
+          <div class="affix">
+          <h4>Contents</h4>
+          <ul class="nav nav-pills nav-stacked">
+            
+              <li  class="active" >
+                <a href="#Settings">Basic settings</a>
+              </li>
+            
+              <li >
+                <a href="#Channels">Channels screen</a>
+              </li>
+            
+              <li >
+                <a href="#Recordings">Recordings screen</a>
+              </li>
+            
+              <li >
+                <a href="#EPG">Electronic Programs Guide</a>
+              </li>
+            
+              <li >
+                <a href="#Timers">Timers &amp; recording rules</a>
+              </li>
+            
+              <li >
+                <a href="#Advancedsettings">Advanced settings</a>
+              </li>
+
+              <li >
+                <a href="#Advancedfeatures">Advanced features</a>
+              </li>
+
+              <li >
+                <a href="#Troubleshooting">Troubleshooting</a>
+              </li>
+          </ul>
           </div>
-          <div style="clear:both;"></div>
         </div>
-      </div>
-        
-      <div class="row" style="text-align:left">
-        <div class="span6">
-          <p>MythTV frontend supports backend 0.27 up to 0.28. Allows streaming of Live TV &amp; Recordings, listening to Radio channels, EPG and Timers.</p>
-          <p>Written in C/C++, it uses the library CPPMyth.</p>
-        </div>
-        <div class="span6" style="text-align:center">
+
+        <div class="span9">
+          <h1>PVR.MythTV addon Manual</h1>
+		  
+		    <div class="row" style="text-align:left">
+			  <div class="span9">
+				<p>The addon supports MythTV Backend version from 0.27 up to 29. It inter-operates with the REST API and the protocol provided by MythTV backend. Allows streaming of Live TV &amp; Recordings, listening to Radio channels, EPG and Timers.</p>
+			  </div>
+			  <div class="span9" style="text-align:center">
 <form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
 <input type="hidden" name="cmd" value="_s-xclick">
 <input type="hidden" name="encrypted" value="-----BEGIN PKCS7-----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-----END PKCS7-----
@@ -60,133 +91,95 @@
 <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!">
 <img alt="" border="0" src="https://www.paypalobjects.com/fr_FR/i/scr/pixel.gif" width="1" height="1">
 </form>
+              </div>
+            </div>
+			
+            <section id="Settings">
+              <h2>Basic settings</h2>
+              <p>To use it first you have to enable the API services of your backend and check network configuration by running mythtv-setup. <a href='http://www.mythtv.org/wiki/User_Manual:Detailed_configuration_Backend'>[1]</a></p>
+
+              <ul>
+              <li>
+              <p>Set the security pin as "<b>0000</b>"</p>
+              </li>
+              <li>
+              <p>Set the IPv6 address of the backend as "<b>::1</b>" if you haven't IP6 network infrastructure, which is mostly the case.</p>
+              <p>Any IPv6 addresses as "fe80::..." are not usable. Only if you have valid IP6 network infrastructure you could set address assigned to your backend. Otherwise addon will not connect properly.</p>
+              </ul>
+
+              <p>You could check for your issue in section <a href="#Troubleshooting">Troubleshooting</a>.</p>
+
+            </section>
+          
+            <section id="Channels">
+              <h2>Channels screen</h2>
+                  <div>
+                      <i class="icon-chevron-right"></i>
+                      todo
+                  </div>
+              
+            </section>
+
+            <section id="Recordings">
+              <h2>Recordings screen</h2>
+                  <div>
+                      <i class="icon-chevron-right"></i>
+                      todo
+                  </div>
+              
+            </section>
+
+            <section id="EPG">
+              <h2>Electronic Programs Guide</h2>
+                  <div>
+                      <i class="icon-chevron-right"></i>
+                      todo
+                  </div>
+              
+            </section>
+
+            <section id="Timers">
+              <h2>Timers &amp; recording rules</h2>
+                  <div>
+                      <i class="icon-chevron-right"></i>
+                      todo
+                  </div>
+              
+            </section>
+
+            <section id="Advancedsettings">
+              <h2>Advanced settings</h2>
+                  <div>
+                      <i class="icon-chevron-right"></i>
+                      todo
+                  </div>
+              
+            </section>
+
+            <section id="Advancedfeatures">
+              <h2>Advanced features</h2>
+                  <div>
+                      <i class="icon-chevron-right"></i>
+                      todo
+                  </div>
+              
+            </section>
+
+            <section id="Troubleshooting">
+              <h2>Troubleshooting</h2>
+                  <div>
+                      <i class="icon-chevron-right"></i>
+<b>Live TV not showing, but I'm pretty sure that it was working according to Kodi. At least the EPG was loading at startup, and the addon was enabled.</b>
+<p>Regular issue is none of channels have been retrieved due a data corruption. The addon had choked on a channel with an invalid character in the name or call sign.
+Editing the channel name or call sign in the MythTV backend will fix the issue.</p>
+                  </div>
+
+            </section>
+
         </div>
       </div>
+      
 
-      <div class="row">
-        <h2>News</h2>
-        <div id="news">
-          <ul>
-            <li><span class="date">09 Apr 2016</span>
-<p>pvr.mythtv 3.4.12 released for Kodi-16 Jarvis.</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-            </li>
-
-            <li><span class="date">05 Jan 2016</span>
-<p>pvr.mythtv 2.8.5 released for Kodi-15.0 Isengard.</p>
-<p>pvr.mythtv 1.13.2 released for Kodi-14.0 Helix.</p>
-<p><i class="icon-chevron-right"></i>Handle protocol 0.28-pre:88</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-            </li>
-
-            <li><span class="date">01 Dec 2015</span>
-<p>pvr.mythtv 2.8.4 released for Kodi-15.0 Isengard.</p>
-<p><i class="icon-chevron-right"></i>Show stream 'channel unavailable' when tuning failed</p>
-<p><i class="icon-chevron-right"></i>Enable buffering for socket</p>
-<p><i class="icon-chevron-right"></i>CPPMyth 2.4.0</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-            </li>
-
-            <li><span class="date">13 Sep 2015</span>
-<p>Rollback to pvr.mythtv 2.6.1 for OpenELEC 6.0/Kodi-15.0 Isengard.</p>
-<p><i class="icon-chevron-right"></i>Caused by blocking issue #16141</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-            </li>
-
-            <li><span class="date">01 Sep 2015</span>
-<p>pvr.mythtv 2.6.2 released for Kodi-15.0 Isengard.</p>
-<p><i class="icon-chevron-right"></i>Security fix for JSON parser</p>
-<p><i class="icon-chevron-right"></i>Add EPG entry associated with recent recording</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-            </li>
-
-	    <li><span class="date">22 Aug 2015</span>
-<p>pvr.mythtv 2.6.1 released for Kodi-15.0 Isengard, pvr.mythtv 1.13.1 released for Kodi-14.0 Helix.</p>
-<p><i class="icon-chevron-right"></i>Support protocol 0.28-pre:87</p>
-<p><i class="icon-chevron-right"></i>Limit channel tune attempts</p>
-<p><i class="icon-chevron-right"></i>CPPMyth 2.2.0</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-	    </li>
-
-            <li><span class="date">19 Jul 2015</span>
-<p>pvr.mythtv 2.4.3 released for Kodi-15.0 Isengard.</p>
-<p><i class="icon-chevron-right"></i>Includes fixes and improvements for Isengard feature: Deleted recordings</p>
-<p><i class="icon-chevron-right"></i>CPPMyth 1.5.1.4</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-            </li>
-
-            <li><span class="date">16 Jul 2015</span>
-<p>pvr.mythtv 1.12.28 released for Kodi.</p>
-<p><i class="icon-chevron-right"></i>Backport bug fixes</p>
-<p><i class="icon-chevron-right"></i>CPPMyth 1.5.1.4</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-            </li>
-
-            <li><span class="date">25 Jun 2015</span>
-<p>pvr.mythtv 1.12.24 released for Kodi.</p>
-<p><i class="icon-chevron-right"></i>Fix crash on cppmyth thread stop</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-            </li>
-
-            <li><span class="date">24 Jun 2015</span>
-<p>pvr.mythtv 1.12.23 released for Kodi.</p>
-<p><i class="icon-chevron-right"></i>Set of fixes for timers</p>
-<p><i class="icon-chevron-right"></i>Fix "priority" bug issue</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-            </li>
-
-            <li><span class="date">22 Jun 2015</span>
-<p>pvr.mythtv 1.12.22 released for Kodi.</p>
-<p><i class="icon-chevron-right"></i>Minor fixes</p>
-<p><i class="icon-chevron-right"></i>Workaround for bug #12461</p>
-<p><i class="icon-chevron-right"></i>Set of fixes for timers (Thanks to metaron-uk)</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-            </li>
-
-            <li><span class="date">29 May 2015</span>
-<p>pvr.mythtv 1.12.20 released for Kodi.</p>
-<p><i class="icon-chevron-right"></i>CPPMyth 1.5.0</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-            </li>
-
-            <li><span class="date">29 April 2015</span>
-<p>pvr.mythtv 1.12.18 released for Kodi.</p>
-<p><i class="icon-chevron-right"></i>Support protocol 0.28-pre:86</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-            </li>
-
-            <li><span class="date">17 April 2015</span>
-<p>pvr.mythtv 1.12.15 released for Kodi.</p>
-<p><i class="icon-chevron-right"></i>Set read ahead timeout to 10 sec</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-            </li>
-
-            <li><span class="date">11 April 2015</span>
-<p>pvr.mythtv 1.12.13 released for Kodi.</p>
-<p><i class="icon-chevron-right"></i>Fix guide service 2.2 (0.28)</p>
-<p><i class="icon-chevron-right"></i>Enable commercial break and cut list by duration (0.28)</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-            </li>
-
-            <li><span class="date">22 March 2015</span>
-<p>pvr.mythtv 1.12.11 released for Kodi.</p>
-<p><i class="icon-chevron-right"></i>Use internal watched status before 0.28</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-            </li>
-
-            <li><span class="date">15 March 2015</span>
-<p>Build IMX6/ARM7 for OpenELEC-5.0 is now available.</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-            </li>
-
-            <li><span class="date">10 March 2015</span>
-<p>pvr.mythtv 1.12.10 released for Kodi.</p>
-<p>pvr.mythtv 1.9.22-45 released for XBMC.</p>
-<p>Get it on the <a href='download/index.html'>download</a> page.</p>
-            </li>
-          </ul>
-        </div>
-      </div>
     </div>
 
     <footer>
