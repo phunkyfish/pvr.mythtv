@@ -38,6 +38,7 @@
 #include <vector>
 #include <map>
 
+class Demux;
 class FileStreaming;
 class TaskHandler;
 
@@ -125,6 +126,13 @@ public:
   bool IsRealTimeStream() const { return m_liveStream ? true : false; }
   PVR_ERROR GetStreamTimes(PVR_STREAM_TIMES *pStreamTimes);
 
+  // Demuxing
+  PVR_ERROR GetStreamProperties(PVR_STREAM_PROPERTIES* pProperties);
+  void DemuxAbort(void);
+  void DemuxFlush(void);
+  DemuxPacket* DemuxRead(void);
+  bool SeekTime(double time, bool backwards, double *startpts);
+
   // Recording playback
   bool OpenRecordedStream(const PVR_RECORDING &recinfo);
   void CloseRecordedStream();
@@ -187,6 +195,9 @@ private:
   int FillChannelsAndChannelGroups();
   MythChannel FindChannel(uint32_t channelId) const;
   int FindPVRChannelUid(uint32_t channelId) const;
+
+  // Demuxer TS
+  Demux *m_demux;
 
   // Recordings
   ProgramInfoMap m_recordings;

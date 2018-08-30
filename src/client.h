@@ -52,6 +52,7 @@
 #define MENUHOOK_REFRESH_CHANNEL_ICONS      5
 #define MENUHOOK_TRIGGER_CHANNEL_UPDATE     6
 
+#define DEFAULT_HANDLE_DEMUXING             false
 #define DEFAULT_TUNE_DELAY                  5
 #define GROUP_RECORDINGS_ALWAYS             0
 #define GROUP_RECORDINGS_ONLY_FOR_SERIES    1
@@ -108,6 +109,7 @@ extern bool         g_bRecAutoRunJob4;
 extern bool         g_bRecAutoExpire;
 extern int          g_iRecTranscoder;
 ///@}
+extern bool         g_bDemuxing;
 extern int          g_iTuneDelay;
 extern int          g_iGroupRecordings;
 extern bool         g_bUseAirdate;

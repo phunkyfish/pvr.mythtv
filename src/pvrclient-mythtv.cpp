@@ -24,6 +24,7 @@
 #include "client.h"
 #include "tools.h"
 #include "avinfo.h"
+#include "demux.h"
 #include "filestreaming.h"
 #include "taskhandler.h"
 
@@ -46,6 +47,7 @@ PVRClientMythTV::PVRClientMythTV()
 , m_fileOps(NULL)
 , m_scheduleManager(NULL)
 , m_todo(NULL)
+, m_demux(NULL)
 , m_recordingChangePinCount(0)
 , m_recordingsAmountChange(false)
 , m_recordingsAmount(0)
@@ -57,6 +59,7 @@ PVRClientMythTV::PVRClientMythTV()
 PVRClientMythTV::~PVRClientMythTV()
 {
   SAFE_DELETE(m_todo);
+  SAFE_DELETE(m_demux);
   SAFE_DELETE(m_dummyStream);
   SAFE_DELETE(m_liveStream);
   SAFE_DELETE(m_recordingStream);
@@ -2062,6 +2065,8 @@ bool PVRClientMythTV::OpenLiveStream(const PVR_CHANNEL &channel)
   // Try to open
   if (m_liveStream->SpawnLiveTV(chanset[0]->chanNum, chanset))
   {
+    if(g_bDemuxing)
+      m_demux = new Demux(m_liveStream);
     XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
     return true;
   }
@@ -2076,6 +2081,8 @@ bool PVRClientMythTV::OpenLiveStream(const PVR_CHANNEL &channel)
     m_dummyStream = new FileStreaming(g_szClientPath + PATH_SEPARATOR_STRING + "resources" + PATH_SEPARATOR_STRING + "channel_unavailable.ts");
   if (m_dummyStream && m_dummyStream->IsValid())
   {
+    if(g_bDemuxing)
+      m_demux = new Demux(m_dummyStream);
     return true;
   }
   SAFE_DELETE(m_dummyStream);
@@ -2090,6 +2097,8 @@ void PVRClientMythTV::CloseLiveStream()
 
   // Begin critical section
   CLockObject lock(m_lock);
+  // Destroy my demuxer
+  SAFE_DELETE(m_demux);
   // Destroy my stream
   SAFE_DELETE(m_liveStream);
   SAFE_DELETE(m_dummyStream);
@@ -2229,6 +2238,33 @@ PVR_ERROR PVRClientMythTV::GetStreamTimes(PVR_STREAM_TIMES* pStreamTimes)
   pStreamTimes->ptsBegin = 0;
   pStreamTimes->ptsEnd = static_cast<int64_t>(difftime(endTs, begTs)) * DVD_TIME_BASE;
   return PVR_ERROR_NO_ERROR;
+}
+
+PVR_ERROR PVRClientMythTV::GetStreamProperties(PVR_STREAM_PROPERTIES* pProperties)
+{
+  return m_demux && m_demux->GetStreamProperties(pProperties) ? PVR_ERROR_NO_ERROR : PVR_ERROR_SERVER_ERROR;
+}
+
+void PVRClientMythTV::DemuxAbort(void)
+{
+  if (m_demux)
+    m_demux->Abort();
+}
+
+void PVRClientMythTV::DemuxFlush(void)
+{
+  if (m_demux)
+    m_demux->Flush();
+}
+
+DemuxPacket* PVRClientMythTV::DemuxRead(void)
+{
+  return m_demux ? m_demux->Read() : NULL;
+}
+
+bool PVRClientMythTV::SeekTime(double time, bool backwards, double* startpts)
+{
+  return m_demux ? m_demux->SeekTime(time, backwards, startpts) : false;
 }
 
 bool PVRClientMythTV::OpenRecordedStream(const PVR_RECORDING &recording)
