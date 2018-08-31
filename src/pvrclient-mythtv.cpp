@@ -2208,6 +2208,7 @@ PVR_ERROR PVRClientMythTV::SignalStatus(PVR_SIGNAL_STATUS &signalStatus)
 PVR_ERROR PVRClientMythTV::GetStreamTimes(PVR_STREAM_TIMES* pStreamTimes)
 {
   time_t begTs, endTs;
+  int64_t startpts = 0;
   {
     CLockObject lock(m_lock);
     if (m_liveStream)
@@ -2219,6 +2220,8 @@ PVR_ERROR PVRClientMythTV::GetStreamTimes(PVR_STREAM_TIMES* pStreamTimes)
         return PVR_ERROR_REJECTED;
       begTs = m_liveStream->GetLiveTimeStart();
       endTs = m_liveStream->GetChainedProgram(seq)->recording.endTs;
+      if (g_bDemuxing && m_demux)
+        startpts = m_demux->GetStartPTS();
     }
     else if (m_recordingStream && !m_recordingStreamInfo.IsNull())
     {
@@ -2234,9 +2237,9 @@ PVR_ERROR PVRClientMythTV::GetStreamTimes(PVR_STREAM_TIMES* pStreamTimes)
   if (now < endTs)
     endTs = now;
   pStreamTimes->startTime = begTs;
-  pStreamTimes->ptsStart = 0;
-  pStreamTimes->ptsBegin = 0;
-  pStreamTimes->ptsEnd = static_cast<int64_t>(difftime(endTs, begTs)) * DVD_TIME_BASE;
+  pStreamTimes->ptsStart = startpts;
+  pStreamTimes->ptsBegin = startpts;
+  pStreamTimes->ptsEnd = startpts + static_cast<int64_t>(difftime(endTs, begTs)) * DVD_TIME_BASE;
   return PVR_ERROR_NO_ERROR;
 }
 
