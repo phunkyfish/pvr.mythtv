@@ -9,7 +9,6 @@ enable_language(CXX)
 enable_language(C)
 
 # Options
-OPTION (BUILD_SHARED_LIBS "Build shared libraries." OFF)
 if (MSVC)
   # This option must match the settings used in your program, in particular if you
   # are linking statically
@@ -104,13 +103,21 @@ else ()
     set (HAVE_GMTIME_R 0)
 endif ()
 
-find_package (ZLIB REQUIRED)
-if (ZLIB_FOUND)
-    include_directories (${ZLIB_INCLUDE_DIRS})
-    set (HAVE_ZLIB 1)
-else ()
-    set (HAVE_ZLIB 0)
-endif ()
+#find_package (ZLIB REQUIRED)
+#if (ZLIB_FOUND)
+#    include_directories (${ZLIB_INCLUDE_DIRS})
+#    set (HAVE_ZLIB 1)
+#else ()
+#    set (HAVE_ZLIB 0)
+#endif ()
+set (BUILD_SHARED_LIBS OFF)
+set (SKIP_INSTALL_ALL ON)
+add_subdirectory (${CMAKE_CURRENT_SOURCE_DIR}/../zlib ${CMAKE_CURRENT_BINARY_DIR}/zlib EXCLUDE_FROM_ALL)
+set (ZLIB_LIBRARIES zlib)
+set (ZLIB_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/../zlib ${CMAKE_CURRENT_BINARY_DIR}/zlib)
+set (ZLIB_FOUND ON)
+include_directories (${ZLIB_INCLUDE_DIRS})
+set (HAVE_ZLIB 1)
 
 set (HAVE_OPENSSL 0)
 
