@@ -41,35 +41,39 @@
           <h4>Contents</h4>
           <ul class="nav nav-pills nav-stacked">
             
-              <li  class="active" >
-                <a href="#Settings">Basic settings</a>
+              <li class="active" >
+                <a href="#BackendSettings">Backend settings</a>
               </li>
             
-              <li >
-                <a href="#Channels">Channels screen</a>
+              <li>
+                <a href="#AddonSettings">PVR Add-on settings</a>
+              </li>
+
+              <li>
+                <a href="#Channels">Channels</a>
               </li>
             
-              <li >
-                <a href="#Recordings">Recordings screen</a>
+              <li>
+                <a href="#LiveTV">Live TV</a>
+              </li>
+
+              <li>
+                <a href="#Recordings">Recordings</a>
               </li>
             
-              <li >
+              <li>
                 <a href="#EPG">Electronic Programs Guide</a>
               </li>
             
-              <li >
+              <li>
                 <a href="#Timers">Timers &amp; recording rules</a>
               </li>
             
-              <li >
+              <li>
                 <a href="#Advancedsettings">Advanced settings</a>
               </li>
 
-              <li >
-                <a href="#Advancedfeatures">Advanced features</a>
-              </li>
-
-              <li >
+              <li>
                 <a href="#Troubleshooting">Troubleshooting</a>
               </li>
           </ul>
@@ -77,11 +81,13 @@
         </div>
 
         <div class="span9">
-          <h1>PVR.MythTV addon Manual</h1>
+          <h1>PVR.MythTV add-on Manual</h1>
 		  
 		    <div class="row" style="text-align:left">
 			  <div class="span9">
-				<p>The addon supports MythTV Backend version from 0.27 up to 29. It inter-operates with the REST API and the protocol provided by MythTV backend. Allows streaming of Live TV &amp; Recordings, listening to Radio channels, EPG and Timers.</p>
+				<p>The add-on supports MythTV Backend version from 0.27 up to 29. It inter-operates with the REST API and
+        the protocol provided by MythTV backend. Allows streaming of Live TV &amp; Recordings, listening to Radio
+        channels, EPG and Timers.</p>
 			  </div>
 			  <div class="span9" style="text-align:center">
 <form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
@@ -94,84 +100,190 @@
               </div>
             </div>
 			
-            <section id="Settings">
-              <h2>Basic settings</h2>
-              <p>To use it first you have to enable the API services of your backend and check network configuration by running mythtv-setup. <a href='http://www.mythtv.org/wiki/User_Manual:Detailed_configuration_Backend'>[1]</a></p>
+            <section id="BackendSettings">
+              <h2>Backend settings</h2>
+              <p>To use it first you have to enable the API services of your backend and check network configuration
+              by running mythtv-setup. <a href='http://www.mythtv.org/wiki/User_Manual:Detailed_configuration_Backend'>[1]</a></p>
 
               <ul>
-              <li>
-              <p>Set the security pin as "<b>0000</b>"</p>
-              </li>
-              <li>
-              <p>Set the IPv6 address of the backend as "<b>::1</b>" if you haven't IP6 network infrastructure, which is mostly the case.</p>
-              <p>Any IPv6 addresses as "fe80::..." are not usable. Only if you have valid IP6 network infrastructure you could set address assigned to your backend. Otherwise addon will not connect properly.</p>
+                <li>
+                  <p>Set the security pin to enable the API services, i.e "<b>0000</b>"</p>
+                </li>
+                <li>
+                  <p>Set the IPv6 address of the backend as "<b>::1</b>" if you haven't IP6 network infrastructure,
+                  which is mostly the case.</p>
+                  <p>Any IPv6 addresses as "fe80::..." are not usable. Only if you have valid IP6 network
+                  infrastructure you could set address assigned to your backend. Otherwise add-on will not connect properly.</p>
+                </li>
               </ul>
 
-              <p>You could check for your issue in section <a href="#Troubleshooting">Troubleshooting</a>.</p>
+              <p><img alt="" border="0" src="screenshots/mythtv-setup.png" width="300" height="200"></p>
+
+              <p>Note: <b>Unlike what you hear on the web, the use of mythfrontend is not necessary to configure the
+              backend for DVR use. So all you need is mythtv-setup to manage your card inputs, channels scan,
+              storages and grabbers for guide and metadata</b>.</p>
 
             </section>
-          
+
+            <section id="AddonSettings">
+              <h2>PVR add-on settings</h2>
+              <i class="icon-chevron-right"></i>
+              Go to configure <b>"General"</b> settings of the add-on
+              <p>                
+                <ul>
+                  <li>
+                    <p>Set the IP address of your <b>MASTER</b> backend. Slave backends will be used according
+                    to the logic implemented in the <b>MASTER</b>.</p>
+                  </li>
+                  <li>
+                    <p>Set the protocol port of the backend. Default is <b>"6543"</b>.</p>
+                  </li>
+                  <li>
+                    <p>Set the API port of the backend. Default is <b>"6544"</b>.</p>
+                  </li>
+                  <li>
+                    <p>Set the security pin previously configured in the backend setup.</p>
+                  </li>
+                  <li>
+                    <p>Optionally set the ethernet address of the backend server to enable WOL.</p>
+                  </li>
+                </ul>
+              </p>
+              <i class="icon-chevron-right"></i>
+              Go to configure <b>"Advanced"</b> settings of the add-on
+              <p>              
+              <ul>
+                <li>
+                  <p>Adjust the tuning delay for LiveTV according to your receivers. <b>5</b> seconds should
+                  be large enougth for modern DVB-T/C receivers and a good signal. Using a rotating dish antenna
+                  need longer delay.</p>
+                </li>
+                <li>
+                  <p>By default limit channel tuning attempts for LiveTV. In a special configuration, you may
+                  want to disable it to force the add-on to try all available receivers one by one until the
+                  channel is successfully tuned.</p>
+                </li>
+              </ul>
+              </p>
+
+              <p>You can check for any issue in section <a href="#Troubleshooting">Troubleshooting</a>.</p>
+
+              <p><img alt="" border="0" src="screenshots/settings.png" width="300" height="200"></p>
+
+            </section>
+            
             <section id="Channels">
-              <h2>Channels screen</h2>
+              <h2>Channels</h2>
+              <div>
+                <p><i class="icon-chevron-right"></i>
+                All <b>visible</b> Channels and their icons are transfered from the backend on startup.</p>
+              </div>
+          
+              <img alt="" border="0" src="screenshots/channels.png" width="300" height="200">
+              <br><br>
+              
+              <div>
+                <p><i class="icon-chevron-right"></i>
+                Some specific actions exist to update channels list or to refresh the icons cache.
+                They can be found in the Kodi menu "<b>Settings | PVR &amp; Live TV | Client specific</b>".</p>
+                <ul>
+                  <li>
+                    Channel list is loaded once at each Kodi startup. You can manually trigger a refreshing
+                    without restart Kodi by launching the action "<b>Trigger channel update</b>".
+                  </li>
+                  <li>
+                    Channel icons are loaded <b>ONCE</b> and could need to be refreshed, i.e when they are updated
+                    manually in the backend or by a guide gragger. To launch the refreshing you have to select
+                    the action "<b>Refresh cache for channel icons</b>".
+                  </li>
+                </ul>
+              </div>
+            </section>
+
+            <section id="LiveTV">
+              <h2>Live TV</h2>
                   <div>
-                      <i class="icon-chevron-right"></i>
-                      todo
+                      <p><i class="icon-chevron-right"></i>
+                      Live TV provides same feature as the MythTV frontend. You can rewind or forward in the
+                      chained shows until next channel switch. Also past live shows can be replay from the
+                      recording group "<b>LiveTV</b>".
                   </div>
               
+                  <p><img alt="" border="0" src="screenshots/livetv.png" width="300" height="200"></p>
+
             </section>
 
             <section id="Recordings">
-              <h2>Recordings screen</h2>
+              <h2>Recordings</h2>
                   <div>
-                      <i class="icon-chevron-right"></i>
-                      todo
+                      <p><i class="icon-chevron-right"></i>
+                      The add-on allows you to manage all the saved and even recently deleted recordings.
+                      A title in "yellow" color highlights a damaged record. You can also see the current status in
+                      MythTV for a recording by the action "<b>Show status of recording</b>".
+                      It will show you the <i>flags</i> and the <i>audio / video</i> properties set in the backend,
+                      even the real filename and storage group.</p>
+                      <p><i class="icon-chevron-right"></i>
+                      By default the add-on will group recordings by title or series as possible.
+                      This behavior can be customized in the add-on settings section <b>Preferences</b>.</p>
+                      <p><i class="icon-chevron-right"></i>
+                      The add-on supplies the following specific actions:
+                      <ul>
+                        <li>
+                          "<b>Delete and re-record</b>" does the same as <b>frontend</b>.
+                        </li>
+                        <li>
+                          "<b>Keep recording</b>" does the same as <b>frontend</b>.
+                        </li>
+                      </ul>
+                      </p>
                   </div>
-              
+
+                  <p><img alt="" border="0" src="screenshots/recordings.png" width="300" height="200"></p>
+
             </section>
 
             <section id="EPG">
               <h2>Electronic Programs Guide</h2>
                   <div>
-                      <i class="icon-chevron-right"></i>
-                      todo
+                      <p><i class="icon-chevron-right"></i>
+                      todo</p>
                   </div>
-              
+
+                  <p><img alt="" border="0" src="screenshots/programs-guide.png" width="150" height="100"></p>
+
             </section>
 
             <section id="Timers">
               <h2>Timers &amp; recording rules</h2>
                   <div>
-                      <i class="icon-chevron-right"></i>
-                      todo
+                      <p><i class="icon-chevron-right"></i>
+                      todo</p>
                   </div>
               
+                  <p><img alt="" border="0" src="screenshots/recording-rules.png" width="150" height="100"></p>
+
             </section>
 
             <section id="Advancedsettings">
               <h2>Advanced settings</h2>
                   <div>
-                      <i class="icon-chevron-right"></i>
-                      todo
+                      <p><i class="icon-chevron-right"></i>
+                      todo</p>
                   </div>
-              
-            </section>
 
-            <section id="Advancedfeatures">
-              <h2>Advanced features</h2>
-                  <div>
-                      <i class="icon-chevron-right"></i>
-                      todo
-                  </div>
-              
+                  <p><img alt="" border="0" src="screenshots/advanced-settings.png" width="150" height="100"></p>
+
             </section>
 
             <section id="Troubleshooting">
               <h2>Troubleshooting</h2>
                   <div>
                       <i class="icon-chevron-right"></i>
-<b>Live TV not showing, but I'm pretty sure that it was working according to Kodi. At least the EPG was loading at startup, and the addon was enabled.</b>
-<p>Regular issue is none of channels have been retrieved due a data corruption. The addon had choked on a channel with an invalid character in the name or call sign.
-Editing the channel name or call sign in the MythTV backend will fix the issue.</p>
+                      <b>Live TV not showing, but I'm pretty sure that it was working according to Kodi. At least the EPG
+                      was loading at startup, and the add-on was enabled.</b>
+                      <p>Regular issue is none of channels have been retrieved due a data corruption. The add-on had choked
+                      on a channel with an invalid character in the name or call sign.
+                      Editing the channel name or call sign in the MythTV backend will fix the issue.</p>
                   </div>
 
             </section>
