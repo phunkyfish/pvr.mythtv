@@ -111,11 +111,12 @@ void PVRClientMythTV::SetDebug(bool silent /*= false*/)
 
 bool PVRClientMythTV::Connect()
 {
+  assert(m_control == NULL);
   SetDebug(true);
-  m_control = new Myth::Control(g_szMythHostname, g_iProtoPort, g_iWSApiPort, g_szWSSecurityPin, g_bBlockMythShutdown);
-  if (!m_control->IsOpen())
+  Myth::Control *control = new Myth::Control(g_szMythHostname, g_iProtoPort, g_iWSApiPort, g_szWSSecurityPin, g_bBlockMythShutdown, true);
+  if (!control->IsOpen())
   {
-    switch(m_control->GetProtoError())
+    switch(control->GetProtoError())
     {
       case Myth::ProtoBase::ERROR_UNKNOWN_VERSION:
         m_connectionError = CONN_ERROR_UNKNOWN_VERSION;
@@ -123,21 +124,22 @@ bool PVRClientMythTV::Connect()
       default:
         m_connectionError = CONN_ERROR_SERVER_UNREACHABLE;
     }
-    SAFE_DELETE(m_control);
+    delete control;
     XBMC->Log(LOG_NOTICE, "Failed to connect to MythTV backend on %s:%d", g_szMythHostname.c_str(), g_iProtoPort);
     // Try wake up for the next attempt
     if (!g_szMythHostEther.empty())
       XBMC->WakeOnLan(g_szMythHostEther.c_str());
     return false;
   }
-  if (!m_control->CheckService())
+  if (!control->CheckService())
   {
     m_connectionError = CONN_ERROR_API_UNAVAILABLE;
-    SAFE_DELETE(m_control);
+    delete control;
     XBMC->Log(LOG_NOTICE,"Failed to connect to MythTV backend on %s:%d with pin %s", g_szMythHostname.c_str(), g_iWSApiPort, g_szWSSecurityPin.c_str());
     return false;
   }
   m_connectionError = CONN_ERROR_NO_ERROR;
+  m_control = control;
   SetDebug(false);
 
   // Create event handler and subscription as needed
