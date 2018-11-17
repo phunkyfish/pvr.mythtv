@@ -43,7 +43,7 @@ PVRClientMythTV::PVRClientMythTV()
 , m_dummyStream(NULL)
 , m_hang(false)
 , m_powerSaving(false)
-, m_fileOps(NULL)
+, m_artworksManager(NULL)
 , m_scheduleManager(NULL)
 , m_todo(NULL)
 , m_recordingChangePinCount(0)
@@ -60,7 +60,7 @@ PVRClientMythTV::~PVRClientMythTV()
   SAFE_DELETE(m_dummyStream);
   SAFE_DELETE(m_liveStream);
   SAFE_DELETE(m_recordingStream);
-  SAFE_DELETE(m_fileOps);
+  SAFE_DELETE(m_artworksManager);
   SAFE_DELETE(m_scheduleManager);
   SAFE_DELETE(m_eventHandler);
   SAFE_DELETE(m_control);
@@ -156,8 +156,8 @@ bool PVRClientMythTV::Connect()
   subid = m_eventHandler->CreateSubscription(this);
   m_eventHandler->SubscribeForEvent(subid, Myth::EVENT_SCHEDULE_CHANGE);
 
-  // Create file operation helper (image caching)
-  m_fileOps = new FileOps(this, g_szMythHostname, g_iWSApiPort, g_szWSSecurityPin);
+  // Create artwork manager
+  m_artworksManager = new ArtworkManager(g_szMythHostname, g_iWSApiPort, g_szWSSecurityPin);
 
   // Create the task handler to process various task
   m_todo = new TaskHandler();
@@ -230,8 +230,6 @@ PVR_ERROR PVRClientMythTV::GetDriveSpace(long long *iTotal, long long *iUsed)
 
 void PVRClientMythTV::OnSleep()
 {
-  if (m_fileOps)
-    m_fileOps->Suspend();
   if (m_eventHandler)
     m_eventHandler->Stop();
   if (m_scheduleManager)
@@ -248,8 +246,6 @@ void PVRClientMythTV::OnWake()
     m_scheduleManager->OpenControl();
   if (m_eventHandler)
     m_eventHandler->Start();
-  if (m_fileOps)
-    m_fileOps->Resume();
 }
 
 void PVRClientMythTV::OnDeactivatedGUI()
@@ -540,11 +536,6 @@ void PVRClientMythTV::RunHouseKeeping()
   }
 }
 
-void PVRClientMythTV::HandleCleanedCache()
-{
-  PVR->TriggerRecordingUpdate();
-}
-
 PVR_ERROR PVRClientMythTV::GetEPGForChannel(ADDON_HANDLE handle, const PVR_CHANNEL &channel, time_t iStart, time_t iEnd)
 {
   if (!m_control)
@@ -645,8 +636,8 @@ PVR_ERROR PVRClientMythTV::GetChannels(ADDON_HANDLE handle, bool bRadio)
         tag.bIsHidden = !itm->second.Visible();
         tag.bIsRadio = itm->second.IsRadio();
 
-        if (m_fileOps)
-          PVR_STRCPY(tag.strIconPath, m_fileOps->GetChannelIconPath(itm->second).c_str());
+        if (m_artworksManager)
+          PVR_STRCPY(tag.strIconPath, m_artworksManager->GetChannelIconPath(itm->second).c_str());
         else
           PVR_STRCPY(tag.strIconPath, "");
 
@@ -943,23 +934,23 @@ PVR_ERROR PVRClientMythTV::GetRecordings(ADDON_HANDLE handle)
       std::string strIconPath;
       std::string strThumbnailPath;
       std::string strFanartPath;
-      if (m_fileOps)
+      if (m_artworksManager)
       {
-        strThumbnailPath = m_fileOps->GetPreviewIconPath(it->second);
+        strThumbnailPath = m_artworksManager->GetPreviewIconPath(it->second);
 
         if (it->second.HasCoverart())
-          strIconPath = m_fileOps->GetArtworkPath(it->second, FileOps::FileTypeCoverart);
+          strIconPath = m_artworksManager->GetArtworkPath(it->second, ArtworkManager::AWTypeCoverart);
         else if (it->second.IsLiveTV())
         {
           MythChannel channel = FindRecordingChannel(it->second);
           if (!channel.IsNull())
-            strIconPath = m_fileOps->GetChannelIconPath(channel);
+            strIconPath = m_artworksManager->GetChannelIconPath(channel);
         }
         else
           strIconPath = strThumbnailPath;
 
         if (it->second.HasFanart())
-          strFanartPath = m_fileOps->GetArtworkPath(it->second, FileOps::FileTypeFanart);
+          strFanartPath = m_artworksManager->GetArtworkPath(it->second, ArtworkManager::AWTypeFanart);
       }
 
       PVR_STRCPY(tag.strIconPath, strIconPath.c_str());
@@ -1056,23 +1047,23 @@ PVR_ERROR PVRClientMythTV::GetDeletedRecordings(ADDON_HANDLE handle)
       std::string strIconPath;
       std::string strThumbnailPath;
       std::string strFanartPath;
-      if (m_fileOps)
+      if (m_artworksManager)
       {
-        strThumbnailPath = m_fileOps->GetPreviewIconPath(it->second);
+        strThumbnailPath = m_artworksManager->GetPreviewIconPath(it->second);
 
         if (it->second.HasCoverart())
-          strIconPath = m_fileOps->GetArtworkPath(it->second, FileOps::FileTypeCoverart);
+          strIconPath = m_artworksManager->GetArtworkPath(it->second, ArtworkManager::AWTypeCoverart);
         else if (it->second.IsLiveTV())
         {
           MythChannel channel = FindRecordingChannel(it->second);
           if (!channel.IsNull())
-            strIconPath = m_fileOps->GetChannelIconPath(channel);
+            strIconPath = m_artworksManager->GetChannelIconPath(channel);
         }
         else
           strIconPath = strThumbnailPath;
 
         if (it->second.HasFanart())
-          strFanartPath = m_fileOps->GetArtworkPath(it->second, FileOps::FileTypeFanart);
+          strFanartPath = m_artworksManager->GetArtworkPath(it->second, ArtworkManager::AWTypeFanart);
       }
       PVR_STRCPY(tag.strIconPath, strIconPath.c_str());
       PVR_STRCPY(tag.strThumbnailPath, strThumbnailPath.c_str());
@@ -2017,9 +2008,6 @@ bool PVRClientMythTV::OpenLiveStream(const PVR_CHANNEL &channel)
     m_liveStream = new Myth::LiveTVPlayback(*m_eventHandler);
   else if (m_liveStream->IsPlaying())
     return false;
-  // Suspend fileOps to avoid connection hang
-  if (m_fileOps)
-    m_fileOps->Suspend();
   // Configure tuning of channel
   m_liveStream->SetTuneDelay(g_iTuneDelay);
   m_liveStream->SetLimitTuneAttempts(g_bLimitTuneAttempts);
@@ -2031,9 +2019,6 @@ bool PVRClientMythTV::OpenLiveStream(const PVR_CHANNEL &channel)
   }
 
   SAFE_DELETE(m_liveStream);
-  // Resume fileOps
-  if (m_fileOps)
-    m_fileOps->Resume();
   XBMC->Log(LOG_ERROR,"%s: Failed to open live stream", __FUNCTION__);
   // Open the dummy stream 'CHANNEL UNAVAILABLE'
   if (!m_dummyStream)
@@ -2057,9 +2042,6 @@ void PVRClientMythTV::CloseLiveStream()
   // Destroy my stream
   SAFE_DELETE(m_liveStream);
   SAFE_DELETE(m_dummyStream);
-  // Resume fileOps
-  if (m_fileOps)
-    m_fileOps->Resume();
 
   if (g_bExtraDebug)
     XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
@@ -2246,10 +2228,6 @@ bool PVRClientMythTV::OpenRecordedStream(const PVR_RECORDING &recording)
     prog = it->second;
   }
 
-  // Suspend fileOps to avoid connection hang
-  if (m_fileOps)
-    m_fileOps->Suspend();
-
   if (prog.HostName() == m_control->GetServerHostName())
   {
     // Request the stream from our master using the opened event handler.
@@ -2312,9 +2290,6 @@ bool PVRClientMythTV::OpenRecordedStream(const PVR_RECORDING &recording)
   }
 
   SAFE_DELETE(m_recordingStream);
-  // Resume fileOps
-  if (m_fileOps)
-    m_fileOps->Resume();
   XBMC->Log(LOG_ERROR,"%s: Failed to open recorded stream", __FUNCTION__);
   return false;
 }
@@ -2329,9 +2304,6 @@ void PVRClientMythTV::CloseRecordedStream()
 
   // Destroy my stream
   SAFE_DELETE(m_recordingStream);
-  // Resume fileOps
-  if (m_fileOps)
-    m_fileOps->Resume();
 
   if (g_bExtraDebug)
     XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
@@ -2554,9 +2526,6 @@ PVR_ERROR PVRClientMythTV::CallMenuHook(const PVR_MENUHOOK &menuhook, const PVR_
   {
     if (menuhook.iHookId == MENUHOOK_TRIGGER_CHANNEL_UPDATE)
     {
-      CLockObject lock(m_channelsLock);
-      if (m_fileOps)
-        m_fileOps->CleanChannelIcons();
       PVR->TriggerChannelUpdate();
       return PVR_ERROR_NO_ERROR;
     }
