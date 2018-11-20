@@ -1,3 +1,6 @@
+v3.5.1
+- Support MythTV 29
+
 v3.5.0
 - Updated language files from Transifex
 - Fix install path for debian build
