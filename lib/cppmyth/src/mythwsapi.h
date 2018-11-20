@@ -151,7 +151,7 @@ namespace Myth
     };
 
     /**
-     * @brief GET Guide/GetProgramGuide
+     * @brief GET Guide/GetProgramGuide for the given channel
      */
     ProgramMapPtr GetProgramGuide(uint32_t chanid, time_t starttime, time_t endtime)
     {
@@ -159,6 +159,16 @@ namespace Myth
       if (wsv.ranking >= 0x00020002) return GetProgramList2_2(chanid, starttime, endtime);
       if (wsv.ranking >= 0x00010000) return GetProgramGuide1_0(chanid, starttime, endtime);
       return ProgramMapPtr(new ProgramMap);
+    }
+
+    /**
+     * @brief GET Guide/GetProgramGuide
+     */
+    std::map<uint32_t, ProgramMapPtr> GetProgramGuide(uint32_t chanid, uint8_t numChannels, time_t starttime, time_t endtime)
+    {
+      WSServiceVersion_t wsv = CheckService(WS_Guide);
+      if (wsv.ranking >= 0x00010000) return GetProgramGuide1_0(chanid, numChannels, starttime, endtime);
+      return std::map<uint32_t, ProgramMapPtr>();
     }
 
     /**
@@ -384,6 +394,16 @@ namespace Myth
     }
 
     /**
+     * @brief Returns URL for channel icon
+     */
+    std::string GetChannelIconUrl(uint32_t chanid, unsigned width = 0, unsigned height = 0)
+    {
+      WSServiceVersion_t wsv = CheckService(WS_Content);
+      if (wsv.ranking >= 0x00010020) return GetChannelIconUrl1_32(chanid, width, height);
+      return "";
+    }
+
+    /**
      * @brief GET Content/GetPreviewImage
      */
     WSStreamPtr GetPreviewImage(uint32_t chanid, time_t recstartts, unsigned width = 0, unsigned height = 0)
@@ -394,6 +414,16 @@ namespace Myth
     }
 
     /**
+     * @brief Returns URL for preview image
+     */
+    std::string GetPreviewImageUrl(uint32_t chanid, time_t recstartts, unsigned width = 0, unsigned height = 0)
+    {
+      WSServiceVersion_t wsv = CheckService(WS_Content);
+      if (wsv.ranking >= 0x00010020) return GetPreviewImageUrl1_32(chanid, recstartts, width, height);
+      return "";
+    }
+
+    /**
      * @brief GET Content/GetRecordingArtwork
      */
     WSStreamPtr GetRecordingArtwork(const std::string& type, const std::string& inetref, uint16_t season, unsigned width = 0, unsigned height = 0)
@@ -401,6 +431,16 @@ namespace Myth
       WSServiceVersion_t wsv = CheckService(WS_Content);
       if (wsv.ranking >= 0x00010020) return GetRecordingArtwork1_32(type, inetref, season, width, height);
       return WSStreamPtr();
+    }
+
+    /**
+     * @brief Returns URL for recording artwork
+     */
+    std::string GetRecordingArtworkUrl(const std::string& type, const std::string& inetref, uint16_t season, unsigned width = 0, unsigned height = 0)
+    {
+      WSServiceVersion_t wsv = CheckService(WS_Content);
+      if (wsv.ranking >= 0x00010020) return GetRecordingArtworkUrl1_32(type, inetref, season, width, height);
+      return "";
     }
 
     /**
@@ -500,6 +540,7 @@ namespace Myth
     ChannelListPtr GetChannelList1_5(uint32_t sourceid, bool onlyVisible);
     ChannelPtr GetChannel1_2(uint32_t chanid);
 
+    std::map<uint32_t, ProgramMapPtr> GetProgramGuide1_0(uint32_t chanid, uint8_t numChannels, time_t starttime, time_t endtime);
     ProgramMapPtr GetProgramGuide1_0(uint32_t chanid, time_t starttime, time_t endtime);
     ProgramMapPtr GetProgramList2_2(uint32_t chanid, time_t starttime, time_t endtime);
 
@@ -533,8 +574,11 @@ namespace Myth
 
     WSStreamPtr GetFile1_32(const std::string& filename, const std::string& sgname);
     WSStreamPtr GetChannelIcon1_32(uint32_t chanid, unsigned width, unsigned height);
+    std::string GetChannelIconUrl1_32(uint32_t chanid, unsigned width, unsigned height);
     WSStreamPtr GetPreviewImage1_32(uint32_t chanid, time_t recstartts, unsigned width, unsigned height);
+    std::string GetPreviewImageUrl1_32(uint32_t chanid, time_t recstartts, unsigned width, unsigned height);
     WSStreamPtr GetRecordingArtwork1_32(const std::string& type, const std::string& inetref, uint16_t season, unsigned width, unsigned height);
+    std::string GetRecordingArtworkUrl1_32(const std::string& type, const std::string& inetref, uint16_t season, unsigned width, unsigned height);
     ArtworkListPtr GetRecordingArtworkList1_32(uint32_t chanid, time_t recstartts);
   };
 
