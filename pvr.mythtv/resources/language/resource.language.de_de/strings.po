@@ -224,6 +224,10 @@ msgctxt "#30069"
 msgid "Show default recording group as root"
 msgstr "Standardaufzeichnungsgruppe als root anzeigen"
 
+msgctxt "#30070"
+msgid "Enable bulk loading for EPG data"
+msgstr "Aktivieren Sie Massenladen für EPG"
+
 msgctxt "#30100"
 msgid "Protocol version: %i - Database version: %i"
 msgstr "Protokollversion: %i - Datenbankversion: %i"

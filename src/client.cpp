@@ -67,6 +67,7 @@ bool          g_bShowNotRecording       = DEFAULT_SHOW_NOT_RECORDING;
 bool          g_bPromptDeleteAtEnd      = DEFAULT_PROMPT_DELETE;
 bool          g_bUseBackendBookmarks    = DEFAULT_BACKEND_BOOKMARKS;
 bool          g_bRootDefaultGroup       = DEFAULT_ROOT_DEFAULT_GROUP;
+bool          g_bEPGBulkLoad            = DEFAULT_EPG_BULK_LOAD;
 
 ///* Client member variables */
 ADDON_STATUS  m_CurStatus               = ADDON_STATUS_UNKNOWN;
@@ -346,6 +347,14 @@ ADDON_STATUS ADDON_Create(void *hdl, void *props)
     /* If setting is unknown fallback to defaults */
     XBMC->Log(LOG_ERROR, "Couldn't get 'root_default_group' setting, falling back to '%u' as default", DEFAULT_ROOT_DEFAULT_GROUP);
     g_bRootDefaultGroup = DEFAULT_ROOT_DEFAULT_GROUP;
+  }
+
+  /* Read setting "epg_bulk_load" from settings.xml */
+  if (!XBMC->GetSetting("epg_bulk_load", &g_bEPGBulkLoad))
+  {
+    /* If setting is unknown fallback to defaults */
+    XBMC->Log(LOG_ERROR, "Couldn't get 'epg_bulk_load' setting, falling back to '%u' as default", DEFAULT_EPG_BULK_LOAD);
+    g_bEPGBulkLoad = DEFAULT_EPG_BULK_LOAD;
   }
 
   free (buffer);
@@ -669,6 +678,13 @@ ADDON_STATUS ADDON_SetSetting(const char *settingName, const void *settingValue)
       PVR->TriggerRecordingUpdate();
     }
   }
+  else if (str == "epg_bulk_load")
+  {
+    XBMC->Log(LOG_INFO, "Changed Setting 'epg_bulk_load' from %u to %u", g_bEPGBulkLoad, *(bool*)settingValue);
+    if (g_bEPGBulkLoad != *(bool*)settingValue)
+      g_bEPGBulkLoad = *(bool*)settingValue;
+  }
+
   return ADDON_STATUS_OK;
 }
 

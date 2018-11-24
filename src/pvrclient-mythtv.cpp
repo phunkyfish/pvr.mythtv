@@ -46,6 +46,7 @@ PVRClientMythTV::PVRClientMythTV()
 , m_artworksManager(NULL)
 , m_scheduleManager(NULL)
 , m_todo(NULL)
+, m_EPGPool(NULL)
 , m_recordingChangePinCount(0)
 , m_recordingsAmountChange(false)
 , m_recordingsAmount(0)
@@ -56,6 +57,7 @@ PVRClientMythTV::PVRClientMythTV()
 
 PVRClientMythTV::~PVRClientMythTV()
 {
+  SAFE_DELETE(m_EPGPool);
   SAFE_DELETE(m_todo);
   SAFE_DELETE(m_dummyStream);
   SAFE_DELETE(m_liveStream);
@@ -162,6 +164,8 @@ bool PVRClientMythTV::Connect()
 
   // Create the task handler to process various task
   m_todo = new TaskHandler();
+
+  m_EPGPool = new EPGPool(m_control, m_todo);
 
   // Now all is ready: Start event handler
   m_eventHandler->Start();
@@ -546,7 +550,12 @@ PVR_ERROR PVRClientMythTV::GetEPGForChannel(ADDON_HANDLE handle, const PVR_CHANN
 
   if (!channel.bIsHidden)
   {
-    Myth::ProgramMapPtr EPG = m_control->GetProgramGuide(channel.iUniqueId, iStart, iEnd);
+    Myth::ProgramMapPtr EPG;
+    if (g_bEPGBulkLoad)
+      EPG = m_EPGPool->GetProgramGuide(channel.iUniqueId, iStart, iEnd);
+    else
+      EPG = m_control->GetProgramGuide(channel.iUniqueId, iStart, iEnd);
+
     // Transfer EPG for the given channel
     for (Myth::ProgramMap::reverse_iterator it = EPG->rbegin(); it != EPG->rend(); ++it)
     {

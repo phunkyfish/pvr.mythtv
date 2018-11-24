@@ -5,3 +5,4 @@
 #include "cppmyth/MythProgramInfo.h"
 #include "cppmyth/MythRecordingRule.h"
 #include "cppmyth/MythScheduleManager.h"
+#include "epgpool.h"

@@ -186,6 +186,8 @@ private:
   MythChannel FindChannel(uint32_t channelId) const;
   int FindPVRChannelUid(uint32_t channelId) const;
 
+  EPGPool *m_EPGPool;
+
   // Recordings
   ProgramInfoMap m_recordings;
   mutable P8PLATFORM::CMutex m_recordingsLock;
