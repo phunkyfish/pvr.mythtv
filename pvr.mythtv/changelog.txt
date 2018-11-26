@@ -1,3 +1,5 @@
+- [backport] Add option to set default recording grouo as root for recordings
+
 v4.18.0
 - Backport fixes and improvements from addon 5.10.0
 
