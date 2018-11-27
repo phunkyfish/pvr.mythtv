@@ -107,7 +107,7 @@ void PVRClientMythTV::SetDebug(bool silent /*= false*/)
   else if (silent)
     Myth::DBGLevel(MYTH_DBG_NONE);
   else
-    Myth::DBGLevel(MYTH_DBG_ERROR);
+    Myth::DBGLevel(MYTH_DBG_WARN);
   Myth::SetDBGMsgCallback(Log);
 }
 

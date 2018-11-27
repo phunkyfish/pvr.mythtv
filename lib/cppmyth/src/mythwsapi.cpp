@@ -828,7 +828,7 @@ std::map<uint32_t, ProgramMapPtr> WSAPI::GetProgramGuide1_0(time_t starttime, ti
     DBG(DBG_ERROR, "%s: unexpected content\n", __FUNCTION__);
     return ret;
   }
-  DBG(DBG_DEBUG, "%s: content parsed\n", __FUNCTION__);
+  DBG(DBG_WARN, "%s: content parsed\n", __FUNCTION__);
 
   // Object: ProgramGuide
   const JSON::Node& glist = root.GetObjectValue("ProgramGuide");
@@ -866,7 +866,7 @@ std::map<uint32_t, ProgramMapPtr> WSAPI::GetProgramGuide1_0(time_t starttime, ti
       pmap->insert(std::make_pair(program->startTime, program));
     }
   }
-  DBG(DBG_DEBUG, "%s: received count(%d)\n", __FUNCTION__, count);
+  DBG(DBG_WARN, "%s: received count(%d)\n", __FUNCTION__, count);
 
   return ret;
 }
@@ -909,7 +909,7 @@ ProgramMapPtr WSAPI::GetProgramGuide1_0(uint32_t chanid, time_t starttime, time_
     DBG(DBG_ERROR, "%s: unexpected content\n", __FUNCTION__);
     return ret;
   }
-  DBG(DBG_DEBUG, "%s: content parsed\n", __FUNCTION__);
+  DBG(DBG_WARN, "%s: content parsed\n", __FUNCTION__);
 
   // Object: ProgramGuide
   const JSON::Node& glist = root.GetObjectValue("ProgramGuide");
@@ -948,7 +948,7 @@ ProgramMapPtr WSAPI::GetProgramGuide1_0(uint32_t chanid, time_t starttime, time_
     }
     break;
   }
-  DBG(DBG_DEBUG, "%s: received count(%d)\n", __FUNCTION__, count);
+  DBG(DBG_WARN, "%s: received count(%d)\n", __FUNCTION__, count);
 
   return ret;
 }
@@ -988,7 +988,7 @@ std::map<uint32_t, ProgramMapPtr> WSAPI::GetProgramGuide2_2(time_t starttime, ti
     req.SetContentParam("EndTime", buf);
     req.SetContentParam("Details", "true");
 
-    DBG(DBG_DEBUG, "%s: request index(%d) count(%d)\n", __FUNCTION__, req_index, req_count);
+    DBG(DBG_WARN, "%s: request index(%d) count(%d)\n", __FUNCTION__, req_index, req_count);
     WSResponse resp(req);
     if (!resp.IsSuccessful())
     {
@@ -1002,7 +1002,7 @@ std::map<uint32_t, ProgramMapPtr> WSAPI::GetProgramGuide2_2(time_t starttime, ti
       DBG(DBG_ERROR, "%s: unexpected content\n", __FUNCTION__);
       break;
     }
-    DBG(DBG_DEBUG, "%s: content parsed\n", __FUNCTION__);
+    DBG(DBG_WARN, "%s: content parsed\n", __FUNCTION__);
 
     // Object: ProgramGuide
     const JSON::Node& glist = root.GetObjectValue("ProgramGuide");
@@ -1042,7 +1042,7 @@ std::map<uint32_t, ProgramMapPtr> WSAPI::GetProgramGuide2_2(time_t starttime, ti
       }
       ++total;
     }
-    DBG(DBG_DEBUG, "%s: received count(%d)\n", __FUNCTION__, count);
+    DBG(DBG_WARN, "%s: received count(%d)\n", __FUNCTION__, count);
     req_index += count; // Set next requested index
   }
   while (count == req_count);
@@ -1082,7 +1082,7 @@ ProgramMapPtr WSAPI::GetProgramList2_2(uint32_t chanid, time_t starttime, time_t
     req.SetContentParam("EndTime", buf);
     req.SetContentParam("Details", "true");
 
-    DBG(DBG_DEBUG, "%s: request index(%d) count(%d)\n", __FUNCTION__, req_index, req_count);
+    DBG(DBG_WARN, "%s: request index(%d) count(%d)\n", __FUNCTION__, req_index, req_count);
     WSResponse resp(req);
     if (!resp.IsSuccessful())
     {
@@ -1096,7 +1096,7 @@ ProgramMapPtr WSAPI::GetProgramList2_2(uint32_t chanid, time_t starttime, time_t
       DBG(DBG_ERROR, "%s: unexpected content\n", __FUNCTION__);
       break;
     }
-    DBG(DBG_DEBUG, "%s: content parsed\n", __FUNCTION__);
+    DBG(DBG_WARN, "%s: content parsed\n", __FUNCTION__);
 
     // Object: ProgramList
     const JSON::Node& plist = root.GetObjectValue("ProgramList");
@@ -1126,7 +1126,7 @@ ProgramMapPtr WSAPI::GetProgramList2_2(uint32_t chanid, time_t starttime, time_t
       ret->insert(std::make_pair(program->startTime, program));
       ++total;
     }
-    DBG(DBG_DEBUG, "%s: received count(%d)\n", __FUNCTION__, count);
+    DBG(DBG_WARN, "%s: received count(%d)\n", __FUNCTION__, count);
     req_index += count; // Set next requested index
   }
   while (count == req_count);
