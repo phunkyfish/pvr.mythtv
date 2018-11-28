@@ -33,6 +33,7 @@
 
 #define BOOLSTR(a)  ((a) ? "true" : "false")
 #define FETCHSIZE   100
+#define FETCHSIZE_L 1000
 
 using namespace Myth;
 
@@ -42,6 +43,8 @@ using namespace Myth;
 #define WS_ROOT_GUIDE         "/Guide"
 #define WS_ROOT_CONTENT       "/Content"
 #define WS_ROOT_DVR           "/Dvr"
+
+static std::string encodeParam(const std::string& str);
 
 WSAPI::WSAPI(const std::string& server, unsigned port, const std::string& securityPin)
 : m_mutex(new OS::CMutex)
@@ -788,6 +791,86 @@ ChannelPtr WSAPI::GetChannel1_2(uint32_t chanid)
 ////
 //// Guide service
 ////
+std::map<uint32_t, ProgramMapPtr> WSAPI::GetProgramGuide1_0(time_t starttime, time_t endtime)
+{
+  std::map<uint32_t, ProgramMapPtr> ret;
+  char buf[32];
+  int32_t count = 0;
+  unsigned proto = (unsigned)m_version.protocol;
+
+  // Get bindings for protocol version
+  const bindings_t *bindlist = MythDTO::getListBindArray(proto);
+  const bindings_t *bindchan = MythDTO::getChannelBindArray(proto);
+  const bindings_t *bindprog = MythDTO::getProgramBindArray(proto);
+
+  // Initialize request header
+  WSRequest req = WSRequest(m_server, m_port);
+  req.RequestAccept(CT_JSON);
+  req.RequestService("/Guide/GetProgramGuide");
+  req.SetContentParam("StartChanId", "0");
+  req.SetContentParam("NumChannels", "0");
+  time_to_iso8601utc(starttime, buf);
+  req.SetContentParam("StartTime", buf);
+  time_to_iso8601utc(endtime, buf);
+  req.SetContentParam("EndTime", buf);
+  req.SetContentParam("Details", "true");
+
+  WSResponse resp(req);
+  if (!resp.IsSuccessful())
+  {
+    DBG(DBG_ERROR, "%s: invalid response\n", __FUNCTION__);
+    return ret;
+  }
+  const JSON::Document json(resp);
+  const JSON::Node& root = json.GetRoot();
+  if (!json.IsValid() || !root.IsObject())
+  {
+    DBG(DBG_ERROR, "%s: unexpected content\n", __FUNCTION__);
+    return ret;
+  }
+  DBG(DBG_DEBUG, "%s: content parsed\n", __FUNCTION__);
+
+  // Object: ProgramGuide
+  const JSON::Node& glist = root.GetObjectValue("ProgramGuide");
+  ItemList list = ItemList(); // Using default constructor
+  JSON::BindObject(glist, &list, bindlist);
+  // List has ProtoVer. Check it or sound alarm
+  if (list.protoVer != proto)
+  {
+    InvalidateService();
+    return ret;
+  }
+  // Object: Channels[]
+  const JSON::Node& chans = glist.GetObjectValue("Channels");
+  // Iterates over the sequence elements.
+  size_t cs = chans.Size();
+  for (size_t ci = 0; ci < cs; ++ci)
+  {
+    const JSON::Node& chan = chans.GetArrayElement(ci);
+    Channel channel;
+    JSON::BindObject(chan, &channel, bindchan);
+    ProgramMapPtr pmap(new ProgramMap);
+    ret.insert(std::make_pair(channel.chanId, pmap));
+    // Object: Programs[]
+    const JSON::Node& progs = chan.GetObjectValue("Programs");
+    // Iterates over the sequence elements.
+    size_t ps = progs.Size();
+    for (size_t pi = 0; pi < ps; ++pi)
+    {
+      ++count;
+      const JSON::Node& prog = progs.GetArrayElement(pi);
+      ProgramPtr program(new Program());  // Using default constructor
+      // Bind the new program
+      JSON::BindObject(prog, program.get(), bindprog);
+      program->channel = channel;
+      pmap->insert(std::make_pair(program->startTime, program));
+    }
+  }
+  DBG(DBG_DEBUG, "%s: received count(%d)\n", __FUNCTION__, count);
+
+  return ret;
+}
+
 ProgramMapPtr WSAPI::GetProgramGuide1_0(uint32_t chanid, time_t starttime, time_t endtime)
 {
   ProgramMapPtr ret(new ProgramMap);
@@ -847,6 +930,8 @@ ProgramMapPtr WSAPI::GetProgramGuide1_0(uint32_t chanid, time_t starttime, time_
     const JSON::Node& chan = chans.GetArrayElement(ci);
     Channel channel;
     JSON::BindObject(chan, &channel, bindchan);
+    if (channel.chanId != chanid)
+      continue;
     // Object: Programs[]
     const JSON::Node& progs = chan.GetObjectValue("Programs");
     // Iterates over the sequence elements.
@@ -861,8 +946,106 @@ ProgramMapPtr WSAPI::GetProgramGuide1_0(uint32_t chanid, time_t starttime, time_
       program->channel = channel;
       ret->insert(std::make_pair(program->startTime, program));
     }
+    break;
   }
   DBG(DBG_DEBUG, "%s: received count(%d)\n", __FUNCTION__, count);
+
+  return ret;
+}
+
+std::map<uint32_t, ProgramMapPtr> WSAPI::GetProgramGuide2_2(time_t starttime, time_t endtime)
+{
+  std::map<uint32_t, ProgramMapPtr> ret;
+  char buf[32];
+  uint32_t req_index = 0, req_count = FETCHSIZE, count = 0, total = 0;
+  unsigned proto = (unsigned)m_version.protocol;
+
+  // Adjust the fetch count according to the number of requested days
+  double d = difftime(endtime, starttime);
+  if (d > 0)
+    req_count = FETCHSIZE / (int)(1.0 + d / (3 * 86400));
+
+  // Get bindings for protocol version
+  const bindings_t *bindlist = MythDTO::getListBindArray(proto);
+  const bindings_t *bindprog = MythDTO::getProgramBindArray(proto);
+  const bindings_t *bindchan = MythDTO::getChannelBindArray(proto);
+
+  // Initialize request header
+  WSRequest req = WSRequest(m_server, m_port);
+  req.RequestAccept(CT_JSON);
+  req.RequestService("/Guide/GetProgramGuide");
+
+  do
+  {
+    req.ClearContent();
+    uint32_to_string(req_index, buf);
+    req.SetContentParam("StartIndex", buf);
+    uint32_to_string(req_count, buf);
+    req.SetContentParam("Count", buf);
+    time_to_iso8601utc(starttime, buf);
+    req.SetContentParam("StartTime", buf);
+    time_to_iso8601utc(endtime, buf);
+    req.SetContentParam("EndTime", buf);
+    req.SetContentParam("Details", "true");
+
+    DBG(DBG_DEBUG, "%s: request index(%d) count(%d)\n", __FUNCTION__, req_index, req_count);
+    WSResponse resp(req);
+    if (!resp.IsSuccessful())
+    {
+      DBG(DBG_ERROR, "%s: invalid response\n", __FUNCTION__);
+      break;
+    }
+    const JSON::Document json(resp);
+    const JSON::Node& root = json.GetRoot();
+    if (!json.IsValid() || !root.IsObject())
+    {
+      DBG(DBG_ERROR, "%s: unexpected content\n", __FUNCTION__);
+      break;
+    }
+    DBG(DBG_DEBUG, "%s: content parsed\n", __FUNCTION__);
+
+    // Object: ProgramGuide
+    const JSON::Node& glist = root.GetObjectValue("ProgramGuide");
+    ItemList list = ItemList(); // Using default constructor
+    JSON::BindObject(glist, &list, bindlist);
+    // List has ProtoVer. Check it or sound alarm
+    if (list.protoVer != proto)
+    {
+      InvalidateService();
+      break;
+    }
+    count = 0;
+    // Object: Channels[]
+    const JSON::Node& chans = glist.GetObjectValue("Channels");
+    // Iterates over the sequence elements.
+    size_t cs = chans.Size();
+    for (size_t ci = 0; ci < cs; ++ci)
+    {
+      ++count;
+      const JSON::Node& chan = chans.GetArrayElement(ci);
+      Channel channel;
+      JSON::BindObject(chan, &channel, bindchan);
+      ProgramMapPtr pmap(new ProgramMap);
+      ret.insert(std::make_pair(channel.chanId, pmap));
+      // Object: Programs[]
+      const JSON::Node& progs = chan.GetObjectValue("Programs");
+      // Iterates over the sequence elements.
+      size_t ps = progs.Size();
+      for (size_t pi = 0; pi < ps; ++pi)
+      {
+        const JSON::Node& prog = progs.GetArrayElement(pi);
+        ProgramPtr program(new Program());  // Using default constructor
+        // Bind the new program
+        JSON::BindObject(prog, program.get(), bindprog);
+        program->channel = channel;
+        pmap->insert(std::make_pair(program->startTime, program));
+      }
+      ++total;
+    }
+    DBG(DBG_DEBUG, "%s: received count(%d)\n", __FUNCTION__, count);
+    req_index += count; // Set next requested index
+  }
+  while (count == req_count);
 
   return ret;
 }
@@ -871,7 +1054,7 @@ ProgramMapPtr WSAPI::GetProgramList2_2(uint32_t chanid, time_t starttime, time_t
 {
   ProgramMapPtr ret(new ProgramMap);
   char buf[32];
-  uint32_t req_index = 0, req_count = FETCHSIZE, count = 0, total = 0;
+  uint32_t req_index = 0, req_count = FETCHSIZE_L, count = 0, total = 0;
   unsigned proto = (unsigned)m_version.protocol;
 
   // Get bindings for protocol version
@@ -2361,6 +2544,15 @@ WSStreamPtr WSAPI::GetFile1_32(const std::string& filename, const std::string& s
   req.SetContentParam("StorageGroup", sgname);
   req.SetContentParam("FileName", filename);
   WSResponse *resp = new WSResponse(req);
+  /* try redirection if any */
+  if (resp->GetStatusCode() == 301 && !resp->Redirection().empty())
+  {
+    URIParser uri(resp->Redirection());
+    WSRequest rreq(ResolveHostName(uri.Host()), uri.Port());
+    rreq.RequestService(std::string("/").append(uri.Path()));
+    delete resp;
+    resp = new WSResponse(rreq);
+  }
   if (!resp->IsSuccessful())
   {
     DBG(DBG_ERROR, "%s: invalid response\n", __FUNCTION__);
@@ -2381,40 +2573,13 @@ WSStreamPtr WSAPI::GetChannelIcon1_32(uint32_t chanid, unsigned width, unsigned 
   req.RequestService("/Guide/GetChannelIcon");
   uint32_to_string(chanid, buf);
   req.SetContentParam("ChanId", buf);
-  if (width && height)
+  if (width)
   {
     uint32_to_string(width, buf);
     req.SetContentParam("Width", buf);
-    uint32_to_string(height, buf);
-    req.SetContentParam("Height", buf);
   }
-  WSResponse *resp = new WSResponse(req);
-  if (!resp->IsSuccessful())
+  if (height)
   {
-    DBG(DBG_ERROR, "%s: invalid response\n", __FUNCTION__);
-    delete resp;
-    return ret;
-  }
-  ret.reset(new WSStream(resp));
-  return ret;
-}
-
-WSStreamPtr WSAPI::GetPreviewImage1_32(uint32_t chanid, time_t recstartts, unsigned width, unsigned height)
-{
-  WSStreamPtr ret;
-  char buf[32];
-
-  // Initialize request header
-  WSRequest req = WSRequest(m_server, m_port);
-  req.RequestService("/Content/GetPreviewImage");
-  uint32_to_string(chanid, buf);
-  req.SetContentParam("ChanId", buf);
-  time_to_iso8601utc(recstartts, buf);
-  req.SetContentParam("StartTime", buf);
-  if (width && height)
-  {
-    uint32_to_string(width, buf);
-    req.SetContentParam("Width", buf);
     uint32_to_string(height, buf);
     req.SetContentParam("Height", buf);
   }
@@ -2438,6 +2603,104 @@ WSStreamPtr WSAPI::GetPreviewImage1_32(uint32_t chanid, time_t recstartts, unsig
   return ret;
 }
 
+std::string WSAPI::GetChannelIconUrl1_32(uint32_t chanid, unsigned width, unsigned height)
+{
+  char buf[32];
+  std::string uri;
+  uri.reserve(95);
+  uri.append("http://").append(m_server);
+  if (m_port != 80)
+  {
+    uint32_to_string(m_port, buf);
+    uri.append(":").append(buf);
+  }
+  uri.append("/Guide/GetChannelIcon");
+  uint32_to_string(chanid, buf);
+  uri.append("?ChanId=").append(buf);
+  if (width)
+  {
+    uint32_to_string(width, buf);
+    uri.append("&Width=").append(buf);
+  }
+  if (height)
+  {
+    uint32_to_string(height, buf);
+    uri.append("&Height=").append(buf);
+  }
+  return uri;
+}
+
+WSStreamPtr WSAPI::GetPreviewImage1_32(uint32_t chanid, time_t recstartts, unsigned width, unsigned height)
+{
+  WSStreamPtr ret;
+  char buf[32];
+
+  // Initialize request header
+  WSRequest req = WSRequest(m_server, m_port);
+  req.RequestService("/Content/GetPreviewImage");
+  uint32_to_string(chanid, buf);
+  req.SetContentParam("ChanId", buf);
+  time_to_iso8601utc(recstartts, buf);
+  req.SetContentParam("StartTime", buf);
+  if (width)
+  {
+    uint32_to_string(width, buf);
+    req.SetContentParam("Width", buf);
+  }
+  if (height)
+  {
+    uint32_to_string(height, buf);
+    req.SetContentParam("Height", buf);
+  }
+  WSResponse *resp = new WSResponse(req);
+  /* try redirection if any */
+  if (resp->GetStatusCode() == 301 && !resp->Redirection().empty())
+  {
+    URIParser uri(resp->Redirection());
+    WSRequest rreq(ResolveHostName(uri.Host()), uri.Port());
+    rreq.RequestService(std::string("/").append(uri.Path()));
+    delete resp;
+    resp = new WSResponse(rreq);
+  }
+  if (!resp->IsSuccessful())
+  {
+    DBG(DBG_ERROR, "%s: invalid response\n", __FUNCTION__);
+    delete resp;
+    return ret;
+  }
+  ret.reset(new WSStream(resp));
+  return ret;
+}
+
+std::string WSAPI::GetPreviewImageUrl1_32(uint32_t chanid, time_t recstartts, unsigned width, unsigned height)
+{
+  char buf[32];
+  std::string uri;
+  uri.reserve(95);
+  uri.append("http://").append(m_server);
+  if (m_port != 80)
+  {
+    uint32_to_string(m_port, buf);
+    uri.append(":").append(buf);
+  }
+  uri.append("/Content/GetPreviewImage");
+  uint32_to_string(chanid, buf);
+  uri.append("?ChanId=").append(buf);
+  time_to_iso8601utc(recstartts, buf);
+  uri.append("&StartTime=").append(encodeParam(buf));
+  if (width)
+  {
+    uint32_to_string(width, buf);
+    uri.append("&Width=").append(buf);
+  }
+  if (height)
+  {
+    uint32_to_string(height, buf);
+    uri.append("&Height=").append(buf);
+  }
+  return uri;
+}
+
 WSStreamPtr WSAPI::GetRecordingArtwork1_32(const std::string& type, const std::string& inetref, uint16_t season, unsigned width, unsigned height)
 {
   WSStreamPtr ret;
@@ -2450,14 +2713,26 @@ WSStreamPtr WSAPI::GetRecordingArtwork1_32(const std::string& type, const std::s
   req.SetContentParam("Inetref", inetref.c_str());
   uint16_to_string(season, buf);
   req.SetContentParam("Season", buf);
-  if (width && height)
+  if (width)
   {
     uint32_to_string(width, buf);
     req.SetContentParam("Width", buf);
+  }
+  if (height)
+  {
     uint32_to_string(height, buf);
     req.SetContentParam("Height", buf);
   }
   WSResponse *resp = new WSResponse(req);
+  /* try redirection if any */
+  if (resp->GetStatusCode() == 301 && !resp->Redirection().empty())
+  {
+    URIParser uri(resp->Redirection());
+    WSRequest rreq(ResolveHostName(uri.Host()), uri.Port());
+    rreq.RequestService(std::string("/").append(uri.Path()));
+    delete resp;
+    resp = new WSResponse(rreq);
+  }
   if (!resp->IsSuccessful())
   {
     DBG(DBG_ERROR, "%s: invalid response\n", __FUNCTION__);
@@ -2466,6 +2741,35 @@ WSStreamPtr WSAPI::GetRecordingArtwork1_32(const std::string& type, const std::s
   }
   ret.reset(new WSStream(resp));
   return ret;
+}
+
+std::string WSAPI::GetRecordingArtworkUrl1_32(const std::string& type, const std::string& inetref, uint16_t season, unsigned width, unsigned height)
+{
+  char buf[32];
+  std::string uri;
+  uri.reserve(127);
+  uri.append("http://").append(m_server);
+  if (m_port != 80)
+  {
+    uint32_to_string(m_port, buf);
+    uri.append(":").append(buf);
+  }
+  uri.append("/Content/GetRecordingArtwork");
+  uri.append("?Type=").append(encodeParam(type));
+  uri.append("&Inetref=").append(encodeParam(inetref));
+  uint16_to_string(season, buf);
+  uri.append("&Season=").append(buf);
+  if (width)
+  {
+    uint32_to_string(width, buf);
+    uri.append("&Width=").append(buf);
+  }
+  if (height)
+  {
+    uint32_to_string(height, buf);
+    uri.append("&Height=").append(buf);
+  }
+  return uri;
 }
 
 ArtworkListPtr WSAPI::GetRecordingArtworkList1_32(uint32_t chanid, time_t recstartts)
@@ -2511,4 +2815,12 @@ ArtworkListPtr WSAPI::GetRecordingArtworkList1_32(uint32_t chanid, time_t recsta
     ret->push_back(artwork);
   }
   return ret;
+}
+
+// Internal
+#include "private/urlencoder.h"
+
+static std::string encodeParam(const std::string& str)
+{
+  return urlencode(str);
 }

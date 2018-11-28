@@ -34,6 +34,7 @@ namespace Myth
   public:
     Control(const std::string& server, unsigned protoPort, unsigned wsapiPort, const std::string& wsapiSecurityPin);
     Control(const std::string& server, unsigned protoPort, unsigned wsapiPort, const std::string& wsapiSecurityPin, bool blockShutdown);
+    Control(const std::string& server, unsigned protoPort, unsigned wsapiPort, const std::string& wsapiSecurityPin, bool blockShutdown, bool frontend);
     ~Control();
 
     bool Open();
@@ -307,6 +308,17 @@ namespace Myth
     }
 
     /**
+     * @brief Query the guide information for a particular time period
+     * @param starttime
+     * @param endtime
+     * @return map
+     */
+    std::map<uint32_t, ProgramMapPtr> GetProgramGuide(time_t starttime, time_t endtime)
+    {
+      return m_wsapi.GetProgramGuide(starttime, endtime);
+    }
+
+    /**
      * @brief Query all configured recording rules
      * @return RecordScheduleListPtr
      */
@@ -435,6 +447,18 @@ namespace Myth
     }
 
     /**
+     * @brief Get URL of icon for a given channel
+     * @param chanid
+     * @param width (default 0)
+     * @param height (default 0)
+     * @return url
+     */
+    std::string GetChannelIconUrl(uint32_t chanid, unsigned width = 0, unsigned height = 0)
+    {
+      return m_wsapi.GetChannelIconUrl(chanid, width, height);
+    }
+
+    /**
      * @brief Get, and optionally scale, an preview thumbnail for a given recording by timestamp, chanid and starttime
      * @param program
      * @param width (default 0)
@@ -444,6 +468,18 @@ namespace Myth
     WSStreamPtr GetPreviewImage(const Program& program, unsigned width = 0, unsigned height = 0)
     {
       return m_wsapi.GetPreviewImage(program.channel.chanId, program.recording.startTs, width, height);
+    }
+
+    /**
+     * @brief Get URL of preview thumbnail for a given recording by timestamp, chanid and starttime
+     * @param program
+     * @param width (default 0)
+     * @param height (default 0)
+     * @return url
+     */
+    std::string GetPreviewImageUrl(const Program& program, unsigned width = 0, unsigned height = 0)
+    {
+      return m_wsapi.GetPreviewImageUrl(program.channel.chanId, program.recording.startTs, width, height);
     }
 
     /**
@@ -457,6 +493,19 @@ namespace Myth
     WSStreamPtr GetRecordingArtwork(const std::string& type, const Program& program, unsigned width = 0, unsigned height = 0)
     {
       return m_wsapi.GetRecordingArtwork(type, program.inetref, program.season, width, height);
+    }
+
+    /**
+     * @brief Get an image URL of a given type (coverart, banner, fanart) for a given recording's inetref and season number.
+     * @param type
+     * @param program
+     * @param width (default 0)
+     * @param height (default 0)
+     * @return WSStreamPtr
+     */
+    std::string GetRecordingArtworkUrl(const std::string& type, const Program& program, unsigned width = 0, unsigned height = 0)
+    {
+      return m_wsapi.GetRecordingArtworkUrl(type, program.inetref, program.season, width, height);
     }
 
     /**
