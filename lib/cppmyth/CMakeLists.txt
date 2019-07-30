@@ -131,51 +131,9 @@ endif ()
 
 # configure the public config file
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/src/cppmyth_config.h.in
-  ${CMAKE_CURRENT_BINARY_DIR}/include/cppmyth_config.h)
+  ${CMAKE_CURRENT_BINARY_DIR}/src/cppmyth_config.h)
 
-# Copy the header files to the public include folder
-
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/mythlocked.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/)
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/mythintrinsic.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/)
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/mythsharedptr.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/)
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/mythtypes.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/)
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/mythcontrol.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/)
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/mytheventhandler.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/)
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/mythfileplayback.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/)
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/mythlivetvplayback.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/)
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/mythrecordingplayback.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/)
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/mythwsapi.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/)
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/mythdebug.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/)
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/mythstream.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/)
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/mythwsstream.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/)
-
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/proto/mythprotobase.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/proto/)
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/proto/mythprotomonitor.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/proto/)
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/proto/mythprotorecorder.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/proto/)
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/proto/mythprotoevent.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/proto/)
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/proto/mythprotoplayback.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/proto/)
-file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/proto/mythprototransfer.h
-           DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/proto/)
-
-include_directories (${CMAKE_CURRENT_BINARY_DIR}/include/.)
+include_directories (${CMAKE_CURRENT_BINARY_DIR}/src/ ${CMAKE_CURRENT_SOURCE_DIR}/src/.)
 
 ###############################################################################
 # add sources
@@ -227,69 +185,5 @@ else ()
   endif ()
 endif ()
 
-if (BUILD_SHARED_LIBS)
-  add_library (cppmyth SHARED ${CPPMYTH_SOURCES})
-else ()
-  add_library (cppmyth STATIC ${CPPMYTH_SOURCES})
-endif ()
+add_library (cppmyth STATIC ${CPPMYTH_SOURCES})
 target_link_libraries (cppmyth ${cppmyth_LIBRARIES})
-set_target_properties (cppmyth PROPERTIES
-    VERSION "${CPPMYTH_LIB_VERSION}"
-    SOVERSION "${CPPMYTH_LIB_SOVERSION}")
-
-###############################################################################
-# install targets
-# Create pkg-conf file.
-# (We use the same files as ./configure does, so we
-#  have to defined the same variables used there).
-if (NOT MSVC)
-  if (NOT DEFINED CMAKE_INSTALL_BINDIR)
-    set (CMAKE_INSTALL_BINDIR bin)
-  endif ()
-  if (NOT DEFINED CMAKE_INSTALL_LIBDIR)
-    set (CMAKE_INSTALL_LIBDIR lib)
-  endif ()
-  if (NOT DEFINED CMAKE_INSTALL_INCLUDEDIR)
-    set (CMAKE_INSTALL_INCLUDEDIR include)
-  endif ()
-  set (prefix      ${CMAKE_INSTALL_PREFIX})
-  set (exec_prefix ${CMAKE_INSTALL_PREFIX})
-  set (libdir      ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR})
-  set (VERSION     ${CPPMYTH_LIB_VERSION})
-  configure_file (cppmyth.pc.in cppmyth.pc @ONLY)
-
-  install (TARGETS cppmyth
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-
-  install (FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/cppmyth.pc
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
-endif ()
-
-install (FILES
-  ${CMAKE_CURRENT_BINARY_DIR}/include/cppmyth_config.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/mythlocked.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/mythintrinsic.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/mythsharedptr.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/mythtypes.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/mythcontrol.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/mytheventhandler.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/mythfileplayback.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/mythlivetvplayback.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/mythrecordingplayback.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/mythwsapi.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/mythdebug.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/mythstream.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/mythwsstream.h
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cppmyth/)
-
-install (FILES
-  ${CMAKE_CURRENT_BINARY_DIR}/include/proto/mythprotobase.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/proto/mythprotomonitor.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/proto/mythprotorecorder.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/proto/mythprotoevent.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/proto/mythprotoplayback.h
-  ${CMAKE_CURRENT_BINARY_DIR}/include/proto/mythprototransfer.h
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cppmyth/proto/)
