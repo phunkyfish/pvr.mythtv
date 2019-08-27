@@ -28,7 +28,7 @@
 #include <cstddef>  // for size_t
 #include <string>
 
-#define SOCKET_HOSTNAME_MAXSIZE       1025
+#define SOCKET_HOSTNAME_MAXSIZE       256
 #define SOCKET_RCVBUF_MINSIZE         16384
 #define SOCKET_READ_TIMEOUT_SEC       10
 #define SOCKET_READ_TIMEOUT_USEC      0
@@ -188,9 +188,10 @@ namespace NSROOT
 
     /**
      * Prepare to accept connections on the socket.
+     * @param queueSize the maximum length for the queue of pending connections
      * @return true on success, else false
      */
-    bool ListenConnection(int maxConnections = SOCKET_CONNECTION_REQUESTS);
+    bool ListenConnection(int queueSize = SOCKET_CONNECTION_REQUESTS);
 
     /**
      * Await a connection.
@@ -213,7 +214,7 @@ namespace NSROOT
     SocketAddress* m_addr;
     net_socket_t m_socket;
     int m_errno;
-    unsigned m_maxconnections;
+    unsigned m_requestQueueSize;
 
     // prevent copy
     TcpServerSocket(const TcpServerSocket&);
@@ -254,13 +255,29 @@ namespace NSROOT
     bool IsValid() const;
 
     /**
-     * Open the socket for the given destination.
+     * Open the socket and configure the given destination.
      * @param af the protocol
      * @param target the address name of destination
      * @param port
      * @return true on success, else false
      */
-    bool Open(SOCKET_AF_t af, const char *target, unsigned port);
+    bool Open(SOCKET_AF_t af, const char* target, unsigned port);
+
+    /**
+     * Open the socket.
+     * @param af the protocol
+     * @param broadcast enable broadcast permission
+     * @return true on success, else false
+     */
+    bool Open(SOCKET_AF_t af, bool broadcast = false);
+
+    /**
+     * Configure the destination.
+     * @param target the address name of destination
+     * @param port
+     * @return true on success, else false
+     */
+    bool SetAddress(const char* target, unsigned port);
 
     /**
      * Configure hop limit value to be used for multicast packets on the opened
