@@ -1,3 +1,6 @@
+v6.1.2
+- Sync upstream cppmyth (2.12.6)
+
 v6.1.1
 - Update build system version
 - Change header include way
