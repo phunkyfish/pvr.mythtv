@@ -7,10 +7,8 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Kodi REQUIRED)
-find_package(p8-platform REQUIRED)
 
-include_directories(${p8-platform_INCLUDE_DIRS}
-                    ${KODI_INCLUDE_DIR}/.. # Hack way with "/..", need bigger Kodi cmake rework to match right include ways
+include_directories(${KODI_INCLUDE_DIR}/.. # Hack way with "/..", need bigger Kodi cmake rework to match right include ways
                     ${PROJECT_SOURCE_DIR}/lib/cppmyth/src)
 
 add_definitions(-DUSE_DEMUX -D__STDC_FORMAT_MACROS)
@@ -31,7 +29,7 @@ file (GLOB MYTHTV_HEADERS
 
 add_subdirectory(lib/cppmyth)
 
-set(DEPLIBS ${p8-platform_LIBRARIES} cppmyth)
+set(DEPLIBS cppmyth)
 if(WIN32)
   list(APPEND DEPLIBS ws2_32)
 else()
