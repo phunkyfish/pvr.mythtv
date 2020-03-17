@@ -548,6 +548,20 @@ void PVRClientMythTV::RunHouseKeeping()
   }
 }
 
+namespace
+{
+
+std::string ParseAsW3CDateString(time_t time)
+{
+  std::tm* tm = std::localtime(&time);
+  char buffer[16];
+  std::strftime(buffer, 16, "%Y-%m-%d", tm);
+
+  return buffer;
+}
+
+} // unnamed namespace
+
 PVR_ERROR PVRClientMythTV::GetEPGForChannel(ADDON_HANDLE handle, int iChannelUid, time_t iStart, time_t iEnd)
 {
   if (!m_control)
@@ -582,9 +596,10 @@ PVR_ERROR PVRClientMythTV::GetEPGForChannel(ADDON_HANDLE handle, int iChannelUid
     tag.strEpisodeName = it->second->subTitle.c_str();
     tag.strIconPath = "";
     tag.strPlotOutline = "";
-    tag.firstAired = it->second->airdate;
+    std::string strFirstAired((it->second->airdate > 0) ? ParseAsW3CDateString(it->second->airdate) : "");
+    tag.strFirstAired = strFirstAired.c_str();
     tag.iEpisodeNumber = (int)it->second->episode;
-    tag.iEpisodePartNumber = 0;
+    tag.iEpisodePartNumber = EPG_TAG_INVALID_SERIES_EPISODE;
     tag.iParentalRating = 0;
     tag.iSeriesNumber = (int)it->second->season;
     tag.iStarRating = atoi(it->second->stars.c_str());
@@ -925,8 +940,16 @@ PVR_ERROR PVRClientMythTV::GetRecordings(ADDON_HANDLE handle)
       PVR_STRCPY(tag.strRecordingId, id.c_str());
       PVR_STRCPY(tag.strTitle, title.c_str());
       PVR_STRCPY(tag.strEpisodeName, it->second.Subtitle().c_str());
-      tag.iSeriesNumber = it->second.Season();
-      tag.iEpisodeNumber = it->second.Episode();
+      if (it->second.Season() == 0 && it->second.Episode() == 0)
+      {
+        tag.iSeriesNumber = PVR_RECORDING_INVALID_SERIES_EPISODE;
+        tag.iEpisodeNumber = PVR_RECORDING_INVALID_SERIES_EPISODE;
+      }
+      else
+      {
+        tag.iSeriesNumber = it->second.Season();
+        tag.iEpisodeNumber = it->second.Episode();
+      }
       time_t airTime(it->second.Airdate());
       if (difftime(airTime, 0) > 0)
       {
@@ -1046,8 +1069,16 @@ PVR_ERROR PVRClientMythTV::GetDeletedRecordings(ADDON_HANDLE handle)
       PVR_STRCPY(tag.strRecordingId, id.c_str());
       PVR_STRCPY(tag.strTitle, it->second.Title().c_str());
       PVR_STRCPY(tag.strEpisodeName, it->second.Subtitle().c_str());
-      tag.iSeriesNumber = it->second.Season();
-      tag.iEpisodeNumber = it->second.Episode();
+      if (it->second.Season() == 0 && it->second.Episode() == 0)
+      {
+        tag.iSeriesNumber = PVR_RECORDING_INVALID_SERIES_EPISODE;
+        tag.iEpisodeNumber = PVR_RECORDING_INVALID_SERIES_EPISODE;
+      }
+      else
+      {
+        tag.iSeriesNumber = it->second.Season();
+        tag.iEpisodeNumber = it->second.Episode();
+      }
       time_t airTime(it->second.Airdate());
       if (difftime(airTime, 0) > 0)
       {
