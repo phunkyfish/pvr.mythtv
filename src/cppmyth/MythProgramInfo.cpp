@@ -321,12 +321,12 @@ std::string MythProgramInfo::Inetref() const
 
 uint16_t MythProgramInfo::Season() const
 {
-  return (m_proginfo ? m_proginfo->season : 0);
+  return (m_proginfo ? m_proginfo->season : -1);
 }
 
 uint16_t MythProgramInfo::Episode() const
 {
-  return (m_proginfo ? m_proginfo->episode : 0);
+  return (m_proginfo ? m_proginfo->episode : -1);
 }
 
 time_t MythProgramInfo::Airdate() const
