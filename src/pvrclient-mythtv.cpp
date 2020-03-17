@@ -548,20 +548,6 @@ void PVRClientMythTV::RunHouseKeeping()
   }
 }
 
-namespace
-{
-
-std::string ParseAsW3CDateString(time_t time)
-{
-  std::tm* tm = std::localtime(&time);
-  char buffer[16];
-  std::strftime(buffer, 16, "%Y-%m-%d", tm);
-
-  return buffer;
-}
-
-} // unnamed namespace
-
 PVR_ERROR PVRClientMythTV::GetEPGForChannel(ADDON_HANDLE handle, int iChannelUid, time_t iStart, time_t iEnd)
 {
   if (!m_control)
@@ -596,8 +582,7 @@ PVR_ERROR PVRClientMythTV::GetEPGForChannel(ADDON_HANDLE handle, int iChannelUid
     tag.strEpisodeName = it->second->subTitle.c_str();
     tag.strIconPath = "";
     tag.strPlotOutline = "";
-    std::string strFirstAired((it->second->airdate > 0) ? ParseAsW3CDateString(it->second->airdate) : "");
-    tag.strFirstAired = strFirstAired.c_str();
+    tag.strFirstAired = it->second->airdate.c_str();
     tag.iEpisodeNumber = (int)it->second->episode;
     tag.iEpisodePartNumber = EPG_TAG_INVALID_SERIES_EPISODE;
     tag.iParentalRating = 0;
@@ -921,8 +906,9 @@ PVR_ERROR PVRClientMythTV::GetRecordings(ADDON_HANDLE handle)
       PVR_RECORDING tag;
       memset(&tag, 0, sizeof(PVR_RECORDING));
       tag.bIsDeleted = false;
+      time_t airTime = Myth::StringToTime(it->second.Airdate());
 
-      tag.recordingTime = GetRecordingTime(it->second.Airdate(), it->second.RecordingStartTime());
+      tag.recordingTime = GetRecordingTime(airTime, it->second.RecordingStartTime());
       tag.iDuration = it->second.Duration();
       tag.iPlayCount = it->second.IsWatched() ? 1 : 0;
       tag.iLastPlayedPosition = it->second.HasBookmark() ? 1 : 0;
@@ -950,7 +936,6 @@ PVR_ERROR PVRClientMythTV::GetRecordings(ADDON_HANDLE handle)
         tag.iSeriesNumber = it->second.Season();
         tag.iEpisodeNumber = it->second.Episode();
       }
-      time_t airTime(it->second.Airdate());
       if (difftime(airTime, 0) > 0)
       {
         struct tm airTimeDate;
@@ -1058,8 +1043,9 @@ PVR_ERROR PVRClientMythTV::GetDeletedRecordings(ADDON_HANDLE handle)
       PVR_RECORDING tag;
       memset(&tag, 0, sizeof(PVR_RECORDING));
       tag.bIsDeleted = true;
+      time_t airTime = Myth::StringToTime(it->second.Airdate());
 
-      tag.recordingTime = GetRecordingTime(it->second.Airdate(), it->second.RecordingStartTime());
+      tag.recordingTime = GetRecordingTime(airTime, it->second.RecordingStartTime());
       tag.iDuration = it->second.Duration();
       tag.iPlayCount = it->second.IsWatched() ? 1 : 0;
       tag.iLastPlayedPosition = it->second.HasBookmark() ? 1 : 0;
@@ -1079,7 +1065,6 @@ PVR_ERROR PVRClientMythTV::GetDeletedRecordings(ADDON_HANDLE handle)
         tag.iSeriesNumber = it->second.Season();
         tag.iEpisodeNumber = it->second.Episode();
       }
-      time_t airTime(it->second.Airdate());
       if (difftime(airTime, 0) > 0)
       {
         struct tm airTimeDate;

@@ -329,9 +329,9 @@ uint16_t MythProgramInfo::Episode() const
   return (m_proginfo ? m_proginfo->episode : -1);
 }
 
-time_t MythProgramInfo::Airdate() const
+std::string MythProgramInfo::Airdate() const
 {
-  return (m_proginfo ? m_proginfo->airdate : 0);
+  return (m_proginfo ? m_proginfo->airdate : "");
 }
 
 bool MythProgramInfo::IsDamaged() const

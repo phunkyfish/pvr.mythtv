@@ -82,7 +82,7 @@ public:
   std::string Inetref() const;
   uint16_t Season() const;
   uint16_t Episode() const;
-  time_t Airdate() const;
+  std::string Airdate() const;
   bool IsDamaged() const;
 
   std::string GroupingTitle() const;
