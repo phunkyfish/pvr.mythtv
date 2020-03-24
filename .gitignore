@@ -1,29 +1,49 @@
 # build artifacts
 build/
+pvr.*/addon.xml
+
+# Debian build files
 debian/changelog
 debian/files
-debian/kodi-pvr-mythtv-dbg.debhelper.log
-debian/kodi-pvr-mythtv-dbg.substvars
-debian/kodi-pvr-mythtv-dbg/
-debian/kodi-pvr-mythtv.debhelper.log
-debian/kodi-pvr-mythtv.postinst.debhelper
-debian/kodi-pvr-mythtv.postrm.debhelper
-debian/kodi-pvr-mythtv.substvars
-debian/kodi-pvr-mythtv/
+debian/*.log
+debian/*.substvars
+debian/.debhelper/
 debian/tmp/
+debian/kodi-pvr-*/
 obj-x86_64-linux-gnu/
-pvr.mythtv/addon.xml
+
+# commonly used editors
+# vim
+*.swp
+
+# Eclipse
+*.project
+*.cproject
+.classpath
+*.sublime-*
+.settings/
+
+# KDevelop 4
+*.kdev4
+
+# gedit
+*~
+
+# CLion
+/.idea
 
 # clion
 .idea/
 
-# Eclipse/CDT
-.cproject
-.project
-.settings/
+# to prevent add after a "git format-patch VALUE" and "git add ." call
+/*.patch
+
+# Visual Studio Code
+.vscode
+
+# to prevent add if project code opened by Visual Studio over CMake file
+.vs/
 
 # others
 nbproject
 cppmyth_config.h
-*.swp
-*~
