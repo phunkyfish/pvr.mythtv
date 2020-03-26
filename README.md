@@ -1,5 +1,6 @@
-[![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](LICENSE.md)
+[![License: GPL v2+](https://img.shields.io/badge/License-GPL%20v2+-blue.svg)](LICENSE.md)
 [![Build Status](https://travis-ci.org/janbar/pvr.mythtv.svg?branch=master)](https://travis-ci.org/janbar/pvr.mythtv)
+[![Build Status](https://jenkins.kodi.tv/view/Addons/job/janbar/job/pvr.mythtv/job/Matrix/badge/icon)](https://jenkins.kodi.tv/blue/organizations/jenkins/janbar%2Fpvr.mythtv/branches/)
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/3115/badge.svg)](https://scan.coverity.com/projects/3115)
 
 # MythTV PVR
