@@ -101,8 +101,9 @@ public:
   PVR_ERROR SetRecordingLastPlayedPosition(const PVR_RECORDING &recording, int lastplayedposition);
   int GetRecordingLastPlayedPosition(const PVR_RECORDING &recording);
   PVR_ERROR GetRecordingEdl(const PVR_RECORDING &recording, PVR_EDL_ENTRY entries[], int *size);
-  PVR_ERROR UndeleteRecording(const PVR_RECORDING& recording);
+  PVR_ERROR UndeleteRecording(const PVR_RECORDING &recording);
   PVR_ERROR PurgeDeletedRecordings();
+  PVR_ERROR GetRecordingSize(const PVR_RECORDING &recording, int64_t *bytes);
 
   // Timers
   int GetTimersAmount();

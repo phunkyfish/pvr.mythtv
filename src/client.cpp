@@ -732,7 +732,9 @@ PVR_ERROR GetAddonCapabilities(PVR_ADDON_CAPABILITIES *pCapabilities)
     pCapabilities->bSupportsRecordingEdl          = true;
     pCapabilities->bSupportsRecordingsRename      = false;
     pCapabilities->bSupportsRecordingsLifetimeChange = false;
-    pCapabilities->bSupportsDescrambleInfo = false;
+    pCapabilities->bSupportsDescrambleInfo        = false;
+    pCapabilities->bSupportsAsyncEPGTransfer      = false;
+    pCapabilities->bSupportsRecordingSize         = true;
 
     return PVR_ERROR_NO_ERROR;
   }
@@ -966,6 +968,13 @@ PVR_ERROR DeleteAllRecordingsFromTrash()
   return g_client->PurgeDeletedRecordings();
 }
 
+PVR_ERROR GetRecordingSize(const PVR_RECORDING* recording, int64_t* sizeInBytes)
+{
+  if (g_client == NULL)
+    return PVR_ERROR_SERVER_ERROR;
+  return g_client->GetRecordingSize(*recording, sizeInBytes);
+};
+
 /*
  * PVR Timer Functions
  */
@@ -1169,7 +1178,6 @@ PVR_ERROR GetDescrambleInfo(PVR_DESCRAMBLE_INFO*) { return PVR_ERROR_NOT_IMPLEME
 PVR_ERROR SetRecordingLifetime(const PVR_RECORDING*) { return PVR_ERROR_NOT_IMPLEMENTED; }
 PVR_ERROR GetChannelStreamProperties(const PVR_CHANNEL*, PVR_NAMED_VALUE*, unsigned int*) { return PVR_ERROR_NOT_IMPLEMENTED; }
 PVR_ERROR GetRecordingStreamProperties(const PVR_RECORDING*, PVR_NAMED_VALUE*, unsigned int*) { return PVR_ERROR_NOT_IMPLEMENTED; }
-PVR_ERROR GetRecordingSize(const PVR_RECORDING* recording, int64_t* sizeInBytes) { return PVR_ERROR_NOT_IMPLEMENTED; };
 PVR_ERROR IsEPGTagRecordable(const EPG_TAG*, bool*) { return PVR_ERROR_NOT_IMPLEMENTED; }
 PVR_ERROR IsEPGTagPlayable(const EPG_TAG*, bool*) { return PVR_ERROR_NOT_IMPLEMENTED; }
 PVR_ERROR GetEPGTagStreamProperties(const EPG_TAG*, PVR_NAMED_VALUE*, unsigned int*) { return PVR_ERROR_NOT_IMPLEMENTED; }

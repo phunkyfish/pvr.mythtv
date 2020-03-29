@@ -994,6 +994,10 @@ PVR_ERROR PVRClientMythTV::GetRecordings(ADDON_HANDLE handle)
       tag.iLifetime = 0;
       tag.iPriority = 0;
       PVR_STRCPY(tag.strPlotOutline, "");
+      tag.sizeInBytes = it->second.FileSize();
+      tag.iFlags = PVR_RECORDING_FLAG_UNDEFINED;
+      if (!it->second.GetPropsSerie())
+        tag.iFlags |= PVR_RECORDING_FLAG_IS_SERIES;
 
       PVR->TransferRecordingEntry(handle, &tag);
     }
@@ -1113,12 +1117,8 @@ PVR_ERROR PVRClientMythTV::GetDeletedRecordings(ADDON_HANDLE handle)
       tag.iLifetime = 0;
       tag.iPriority = 0;
       PVR_STRCPY(tag.strPlotOutline, "");
-
-      /* TODO: PVR API 5.0.0: Implement this */
-      tag.iChannelUid = PVR_CHANNEL_INVALID_UID;
-
-      /* TODO: PVR API 5.1.0: Implement this */
-      tag.channelType = PVR_RECORDING_CHANNEL_TYPE_UNKNOWN;
+      tag.sizeInBytes = it->second.FileSize();
+      tag.iFlags = PVR_RECORDING_FLAG_UNDEFINED;
 
       PVR->TransferRecordingEntry(handle, &tag);
     }
@@ -1592,6 +1592,25 @@ PVR_ERROR PVRClientMythTV::PurgeDeletedRecordings()
   }
   if (err)
     return PVR_ERROR_REJECTED;
+  return PVR_ERROR_NO_ERROR;
+}
+
+PVR_ERROR PVRClientMythTV::GetRecordingSize(const PVR_RECORDING &recording, int64_t *bytes)
+{
+  if (!m_control)
+    return PVR_ERROR_SERVER_ERROR;
+  *bytes = 0;
+  if (g_bExtraDebug)
+    XBMC->Log(LOG_DEBUG, "%s: %s", __FUNCTION__, recording.strTitle);
+  // Check recording
+  Myth::OS::CLockGuard lock(*m_recordingsLock);
+  ProgramInfoMap::iterator it = m_recordings.find(recording.strRecordingId);
+  if (it == m_recordings.end())
+  {
+    XBMC->Log(LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.strRecordingId);
+    return PVR_ERROR_INVALID_PARAMETERS;
+  }
+  *bytes = it->second.FileSize();
   return PVR_ERROR_NO_ERROR;
 }
 

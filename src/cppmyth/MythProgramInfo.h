@@ -84,6 +84,7 @@ public:
   uint16_t Episode() const;
   std::string Airdate() const;
   bool IsDamaged() const;
+  int64_t FileSize() const;
 
   std::string GroupingTitle() const;
 

@@ -339,6 +339,11 @@ bool MythProgramInfo::IsDamaged() const
   return ((m_proginfo && (m_proginfo->videoProps & 0x0020)) ? true : false);
 }
 
+int64_t MythProgramInfo::FileSize() const
+{
+  return (m_proginfo ? m_proginfo->fileSize : 0);
+}
+
 std::string MythProgramInfo::GroupingTitle() const
 {
   if (!m_proginfo || !m_groupingTitle.empty())
