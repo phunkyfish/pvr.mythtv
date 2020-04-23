@@ -1744,7 +1744,7 @@ PVR_ERROR PVRClientMythTV::GetTimers(ADDON_HANDLE handle)
 
     // Add it to memorandom: cf UpdateTimer()
     MYTH_SHARED_PTR<PVR_TIMER> pTag = MYTH_SHARED_PTR<PVR_TIMER>(new PVR_TIMER(tag));
-    m_PVRtimerMemorandum.insert(std::make_pair((unsigned int&)tag.iClientIndex, pTag));
+    m_PVRtimerMemorandum.insert(std::make_pair(static_cast<unsigned int>(tag.iClientIndex), pTag));
     PVR->TransferTimerEntry(handle, &tag);
     if (g_bExtraDebug)
       XBMC->Log(LOG_DEBUG, "%s: #%u: IN=%d RS=%d type %u state %d parent %u autoexpire %d", __FUNCTION__,
