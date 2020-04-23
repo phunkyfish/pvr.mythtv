@@ -1417,7 +1417,7 @@ const MythTimerType::AttributeList& MythScheduleHelper75::GetRuleRecordingGroupL
       {
         if (count == PVR_ADDON_TIMERTYPE_VALUES_ARRAY_SIZE)
         {
-          XBMC->Log(LOG_NOTICE, "75::%s: List overflow (%d): %u remaining value(s) are not loaded", __FUNCTION__, count, (unsigned)(strl->size() - count));
+          XBMC->Log(LOG_INFO, "75::%s: List overflow (%d): %u remaining value(s) are not loaded", __FUNCTION__, count, (unsigned)(strl->size() - count));
           break;
         }
         m_recGroupList.push_back(std::make_pair(index++, *it));

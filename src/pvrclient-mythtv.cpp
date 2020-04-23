@@ -86,7 +86,7 @@ static void Log(int level, char *msg)
       doLog = true;
       break;
     case MYTH_DBG_WARN:
-      loglevel = LOG_NOTICE;
+      loglevel = LOG_INFO;
       doLog = true;
       break;
     case MYTH_DBG_INFO:
@@ -133,7 +133,7 @@ bool PVRClientMythTV::Connect()
         m_connectionError = CONN_ERROR_SERVER_UNREACHABLE;
     }
     delete control;
-    XBMC->Log(LOG_NOTICE, "Failed to connect to MythTV backend on %s:%d", g_szMythHostname.c_str(), g_iProtoPort);
+    XBMC->Log(LOG_INFO, "Failed to connect to MythTV backend on %s:%d", g_szMythHostname.c_str(), g_iProtoPort);
     // Try wake up for the next attempt
     if (!g_szMythHostEther.empty())
       XBMC->WakeOnLan(g_szMythHostEther.c_str());
@@ -143,7 +143,7 @@ bool PVRClientMythTV::Connect()
   {
     m_connectionError = CONN_ERROR_API_UNAVAILABLE;
     delete control;
-    XBMC->Log(LOG_NOTICE,"Failed to connect to MythTV backend on %s:%d with pin %s", g_szMythHostname.c_str(), g_iWSApiPort, g_szWSSecurityPin.c_str());
+    XBMC->Log(LOG_INFO,"Failed to connect to MythTV backend on %s:%d with pin %s", g_szMythHostname.c_str(), g_iWSApiPort, g_szWSSecurityPin.c_str());
     return false;
   }
   m_connectionError = CONN_ERROR_NO_ERROR;
@@ -362,13 +362,13 @@ void PVRClientMythTV::HandleAskRecording(const Myth::EventMessage& msg)
   int timeuntil = Myth::StringToInt(msg.subject[2]);
   int hasrec = Myth::StringToInt(msg.subject[3]);
   int haslater = Myth::StringToInt(msg.subject[4]);
-  XBMC->Log(LOG_NOTICE, "%s: Event ASK_RECORDING: rec=%d timeuntil=%d hasrec=%d haslater=%d", __FUNCTION__,
+  XBMC->Log(LOG_INFO, "%s: Event ASK_RECORDING: rec=%d timeuntil=%d hasrec=%d haslater=%d", __FUNCTION__,
           cardid, timeuntil, hasrec, haslater);
 
   std::string title;
   if (msg.program)
     title = msg.program->title;
-  XBMC->Log(LOG_NOTICE, "%s: Event ASK_RECORDING: title=%s", __FUNCTION__, title.c_str());
+  XBMC->Log(LOG_INFO, "%s: Event ASK_RECORDING: title=%s", __FUNCTION__, title.c_str());
 
   if (timeuntil >= 0 && cardid > 0 && m_liveStream && m_liveStream->GetCardId() == cardid)
   {
@@ -532,7 +532,7 @@ void PVRClientMythTV::RunHouseKeeping()
   // Reconnect handler when backend connection has hanging during last period
   if (!m_hang && m_control->HasHanging())
   {
-    XBMC->Log(LOG_NOTICE, "%s: Ask to refresh handler connection since control connection has hanging", __FUNCTION__);
+    XBMC->Log(LOG_INFO, "%s: Ask to refresh handler connection since control connection has hanging", __FUNCTION__);
     m_eventHandler->Reset();
     m_control->CleanHanging();
   }
@@ -1337,7 +1337,7 @@ PVR_ERROR PVRClientMythTV::SetRecordingLastPlayedPosition(const PVR_RECORDING &r
         return PVR_ERROR_NO_ERROR;
       }
     }
-    XBMC->Log(LOG_NOTICE, "%s: Setting Bookmark failed", __FUNCTION__);
+    XBMC->Log(LOG_INFO, "%s: Setting Bookmark failed", __FUNCTION__);
     return PVR_ERROR_NO_ERROR;
   }
   XBMC->Log(LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.strRecordingId);
@@ -1802,7 +1802,7 @@ PVR_ERROR PVRClientMythTV::AddTimer(const PVR_TIMER &timer)
     {
       XBMC->Log(LOG_DEBUG, "%s: Timer is a quick recording. Toggling Record on", __FUNCTION__);
       if (m_liveStream->IsLiveRecording())
-        XBMC->Log(LOG_NOTICE, "%s: Record already on! Retrying...", __FUNCTION__);
+        XBMC->Log(LOG_INFO, "%s: Record already on! Retrying...", __FUNCTION__);
       else
       {
         // Add bookmark for the current stream position
@@ -1985,11 +1985,11 @@ MythTimerEntry PVRClientMythTV::PVRtoTimerEntry(const PVR_TIMER& timer, bool che
       entry.callsign = epgit->second->channel.callSign;
       st = entry.epgInfo.StartTime();
       et = entry.epgInfo.EndTime();
-      XBMC->Log(LOG_NOTICE, "%s: select EPG program: %u %lu %s", __FUNCTION__, entry.chanid, st, entry.epgInfo.Title().c_str());
+      XBMC->Log(LOG_INFO, "%s: select EPG program: %u %lu %s", __FUNCTION__, entry.chanid, st, entry.epgInfo.Title().c_str());
     }
     else
     {
-      XBMC->Log(LOG_NOTICE, "%s: EPG program not found: %u %lu", __FUNCTION__, bid, bst);
+      XBMC->Log(LOG_INFO, "%s: EPG program not found: %u %lu", __FUNCTION__, bid, bst);
       hasEpg = false;
     }
   }
@@ -2005,7 +2005,7 @@ MythTimerEntry PVRClientMythTV::PVRtoTimerEntry(const PVR_TIMER& timer, bool che
     }
     else
     {
-      XBMC->Log(LOG_NOTICE,"%s: Channel not found: %u", __FUNCTION__, timer.iClientChannelUid);
+      XBMC->Log(LOG_INFO,"%s: Channel not found: %u", __FUNCTION__, timer.iClientChannelUid);
       hasChannel = false;
     }
   }
@@ -2332,7 +2332,7 @@ bool PVRClientMythTV::OpenRecordedStream(const PVR_RECORDING &recording)
   Myth::OS::CLockGuard lock(*m_lock);
   if (m_recordingStream)
   {
-    XBMC->Log(LOG_NOTICE, "%s: Recorded stream is busy", __FUNCTION__);
+    XBMC->Log(LOG_INFO, "%s: Recorded stream is busy", __FUNCTION__);
     return false;
   }
 
@@ -2383,8 +2383,8 @@ bool PVRClientMythTV::OpenRecordedStream(const PVR_RECORDING &recording)
         return true;
       }
       SAFE_DELETE(m_recordingStream);
-      XBMC->Log(LOG_NOTICE, "%s: Failed to open recorded stream from master backend", __FUNCTION__);
-      XBMC->Log(LOG_NOTICE, "%s: You should uncheck option 'MasterBackendOverride' from MythTV setup", __FUNCTION__);
+      XBMC->Log(LOG_INFO, "%s: Failed to open recorded stream from master backend", __FUNCTION__);
+      XBMC->Log(LOG_INFO, "%s: You should uncheck option 'MasterBackendOverride' from MythTV setup", __FUNCTION__);
     }
     // Query backend server IP
     std::string backend_addr(m_control->GetBackendServerIP6(prog.HostName()));

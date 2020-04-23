@@ -103,8 +103,8 @@ ADDON_STATUS ADDON_Create(void *hdl, void *props)
     SAFE_DELETE(XBMC);
     return ADDON_STATUS_PERMANENT_FAILURE;
   }
-  XBMC->Log(LOG_NOTICE, "Creating MythTV PVR-Client");
-  XBMC->Log(LOG_NOTICE, "Addon compiled with PVR API version %s", STR(ADDON_INSTANCE_VERSION_PVR));
+  XBMC->Log(LOG_INFO, "Creating MythTV PVR-Client");
+  XBMC->Log(LOG_INFO, "Addon compiled with PVR API version %s", STR(ADDON_INSTANCE_VERSION_PVR));
   XBMC->Log(LOG_DEBUG, "Register handle @ libXBMC_addon...done");
   XBMC->Log(LOG_DEBUG, "Checking props...");
   if (!props)
@@ -425,7 +425,7 @@ ADDON_STATUS ADDON_Create(void *hdl, void *props)
 
   if (g_launcher->Start())
   {
-    XBMC->Log(LOG_NOTICE, "Addon started successfully");
+    XBMC->Log(LOG_INFO, "Addon started successfully");
     return (m_CurStatus = ADDON_STATUS_OK);
   }
 
@@ -441,7 +441,7 @@ void ADDON_Destroy()
     g_bCreated = false;
     SAFE_DELETE(g_launcher);
     SAFE_DELETE(g_client);
-    XBMC->Log(LOG_NOTICE, "Addon destroyed.");
+    XBMC->Log(LOG_INFO, "Addon destroyed.");
     SAFE_DELETE(PVR);
     SAFE_DELETE(XBMC);
     SAFE_DELETE(GUI);

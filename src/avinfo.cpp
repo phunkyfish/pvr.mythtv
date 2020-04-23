@@ -207,7 +207,7 @@ void AVInfo::Process()
     }
 
     if (ret < 0)
-      XBMC->Log(LOG_NOTICE, LOGTAG "%s: error %d", __FUNCTION__, ret);
+      XBMC->Log(LOG_INFO, LOGTAG "%s: error %d", __FUNCTION__, ret);
 
     if (ret == TSDemux::AVCONTEXT_TS_ERROR)
       throughput = static_cast<size_t>(m_AVContext->Shift());

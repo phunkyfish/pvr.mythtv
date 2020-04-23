@@ -143,7 +143,7 @@ void* PVRClientLauncherPrivate::Process()
       m_alarm.Wait(PVRCLIENT_LAUNCHER_RETRY * 1000);
     }
   }
-  XBMC->Log(LOG_NOTICE, "Launcher stopped");
+  XBMC->Log(LOG_INFO, "Launcher stopped");
   // Signal the launcher has finished
   m_alarm.Broadcast();
   return 0;
