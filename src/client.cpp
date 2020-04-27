@@ -113,7 +113,7 @@ ADDON_STATUS ADDON_Create(void *hdl, void *props)
     return ADDON_STATUS_PERMANENT_FAILURE;
   }
   XBMC->Log(LOG_DEBUG, "Checking props...done");
-  PVR_PROPERTIES* pvrprops = (PVR_PROPERTIES*)props;
+  AddonProperties_PVR* pvrprops = (AddonProperties_PVR*)props;
 
   XBMC->Log(LOG_DEBUG, "Register handle @ libXBMC_pvr...");
   PVR = new CHelper_libXBMC_pvr;
