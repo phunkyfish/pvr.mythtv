@@ -710,7 +710,7 @@ ADDON_STATUS ADDON_SetSetting(const char *settingName, const void *settingValue)
  * PVR Client AddOn specific public library functions
  ***********************************************************/
 
-PVR_ERROR GetAddonCapabilities(PVR_ADDON_CAPABILITIES *pCapabilities)
+PVR_ERROR GetCapabilities(PVR_ADDON_CAPABILITIES *pCapabilities)
 {
   if (g_client != NULL)
   {
