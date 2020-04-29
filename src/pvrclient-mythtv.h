@@ -119,7 +119,7 @@ public:
   int ReadLiveStream(unsigned char *pBuffer, unsigned int iBufferSize);
   long long SeekLiveStream(long long iPosition, int iWhence);
   long long LengthLiveStream();
-  PVR_ERROR SignalStatus(PVR_SIGNAL_STATUS &signalStatus);
+  PVR_ERROR GetSignalStatus(PVR_SIGNAL_STATUS *signalStatus);
   bool IsRealTimeStream() const { return m_liveStream ? true : false; }
   PVR_ERROR GetStreamTimes(PVR_STREAM_TIMES *pStreamTimes);
 
