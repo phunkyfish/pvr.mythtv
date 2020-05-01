@@ -2254,7 +2254,7 @@ long long PVRClientMythTV::LengthLiveStream()
   return retval;
 }
 
-PVR_ERROR PVRClientMythTV::SignalStatus(PVR_SIGNAL_STATUS &signalStatus)
+PVR_ERROR PVRClientMythTV::GetSignalStatus(PVR_SIGNAL_STATUS *signalStatus)
 {
   if (g_bExtraDebug)
     XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
@@ -2265,18 +2265,18 @@ PVR_ERROR PVRClientMythTV::SignalStatus(PVR_SIGNAL_STATUS &signalStatus)
 
   char buf[50];
   sprintf(buf, "Myth Recorder %u", (unsigned)m_liveStream->GetCardId());
-  PVR_STRCPY(signalStatus.strAdapterName, buf);
+  PVR_STRCPY(signalStatus->strAdapterName, buf);
   Myth::SignalStatusPtr signal = m_liveStream->GetSignal();
   if (signal)
   {
     if (signal->lock)
-      PVR_STRCPY(signalStatus.strAdapterStatus, "Locked");
+      PVR_STRCPY(signalStatus->strAdapterStatus, "Locked");
     else
-      PVR_STRCPY(signalStatus.strAdapterStatus, "No lock");
-    signalStatus.iSignal = signal->signal;
-    signalStatus.iBER = signal->ber;
-    signalStatus.iSNR = signal->snr;
-    signalStatus.iUNC = signal->ucb;
+      PVR_STRCPY(signalStatus->strAdapterStatus, "No lock");
+    signalStatus->iSignal = signal->signal;
+    signalStatus->iBER = signal->ber;
+    signalStatus->iSNR = signal->snr;
+    signalStatus->iUNC = signal->ucb;
   }
 
   if (g_bExtraDebug)

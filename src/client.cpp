@@ -113,7 +113,7 @@ ADDON_STATUS ADDON_Create(void *hdl, void *props)
     return ADDON_STATUS_PERMANENT_FAILURE;
   }
   XBMC->Log(LOG_DEBUG, "Checking props...done");
-  PVR_PROPERTIES* pvrprops = (PVR_PROPERTIES*)props;
+  AddonProperties_PVR* pvrprops = (AddonProperties_PVR*)props;
 
   XBMC->Log(LOG_DEBUG, "Register handle @ libXBMC_pvr...");
   PVR = new CHelper_libXBMC_pvr;
@@ -710,7 +710,7 @@ ADDON_STATUS ADDON_SetSetting(const char *settingName, const void *settingValue)
  * PVR Client AddOn specific public library functions
  ***********************************************************/
 
-PVR_ERROR GetAddonCapabilities(PVR_ADDON_CAPABILITIES *pCapabilities)
+PVR_ERROR GetCapabilities(PVR_ADDON_CAPABILITIES *pCapabilities)
 {
   if (g_client != NULL)
   {
@@ -1061,12 +1061,12 @@ int ReadLiveStream(unsigned char *pBuffer, unsigned int iBufferSize)
   return dataread;
 }
 
-PVR_ERROR SignalStatus(PVR_SIGNAL_STATUS &signalStatus)
+PVR_ERROR GetSignalStatus(int channelUid, PVR_SIGNAL_STATUS *signalStatus)
 {
   if (g_client == NULL)
     return PVR_ERROR_SERVER_ERROR;
 
-  return g_client->SignalStatus(signalStatus);
+  return g_client->GetSignalStatus(signalStatus);
 }
 
 void PauseStream(bool bPaused)
@@ -1174,7 +1174,7 @@ void DemuxReset() {}
 void FillBuffer(bool mode) {}
 void SetSpeed(int) {};
 PVR_ERROR SetEPGTimeFrame(int) { return PVR_ERROR_NOT_IMPLEMENTED; }
-PVR_ERROR GetDescrambleInfo(PVR_DESCRAMBLE_INFO*) { return PVR_ERROR_NOT_IMPLEMENTED; }
+PVR_ERROR GetDescrambleInfo(int, PVR_DESCRAMBLE_INFO*) { return PVR_ERROR_NOT_IMPLEMENTED; }
 PVR_ERROR SetRecordingLifetime(const PVR_RECORDING*) { return PVR_ERROR_NOT_IMPLEMENTED; }
 PVR_ERROR GetChannelStreamProperties(const PVR_CHANNEL*, PVR_NAMED_VALUE*, unsigned int*) { return PVR_ERROR_NOT_IMPLEMENTED; }
 PVR_ERROR GetRecordingStreamProperties(const PVR_RECORDING*, PVR_NAMED_VALUE*, unsigned int*) { return PVR_ERROR_NOT_IMPLEMENTED; }
