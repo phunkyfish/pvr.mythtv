@@ -2615,14 +2615,18 @@ PVR_ERROR PVRClientMythTV::CallEPGMenuHook(const kodi::addon::PVRMenuhook& menuh
     if (menuhook.GetHookId() == MENUHOOK_INFO_EPG)
     {
       std::vector<std::string> items(8);
-      items[0] = "BID " + std::to_string(tag.GetUniqueBroadcastId());
-      items[1] = Myth::TimeToString(epgInfo.StartTime());
-      items[2] = Myth::TimeToString(epgInfo.EndTime());
-      items[3] = epgInfo.ChannelName();
-      items[4] = epgInfo.ChannelNumber();
-      items[5] = epgInfo.Category();
-      items[6] = epgInfo.CategoryType();
-      items[7] = epgInfo.SeriesID();
+      items[0].append("BID : [COLOR white]").append(std::to_string(tag.GetUniqueBroadcastId())).append("[/COLOR]");
+      items[1].append("StartTime : [COLOR white]").append(Myth::TimeToString(epgInfo.StartTime())).append("[/COLOR]");
+      items[2].append("EndTime : [COLOR white]").append(Myth::TimeToString(epgInfo.EndTime())).append("[/COLOR]");
+      items[3].append("ChannelName : [COLOR white]").append(epgInfo.ChannelName()).append("[/COLOR]");
+      items[4].append("ChannelNum : [COLOR white]").append(epgInfo.ChannelNumber()).append("[/COLOR]");
+      items[5].append("CategoryName : [COLOR white]").append(epgInfo.Category()).append("[/COLOR]");
+      char genreCode[8];
+      int genre = m_categories.Category(epgInfo.Category());
+      snprintf(genreCode, sizeof(genreCode), "0x%.2X", genre & 0xFF);
+      items[6].append("CodeEIT : [COLOR white]").append(genreCode).append("[/COLOR]");
+      items[7].append("SerieID : [COLOR white]").append(epgInfo.SeriesID()).append("[/COLOR]");
+      kodi::gui::dialogs::Select::Show(epgInfo.Title(), items);
 
       return PVR_ERROR_NO_ERROR;
     }
@@ -2692,24 +2696,16 @@ PVR_ERROR PVRClientMythTV::CallRecordingMenuHook(const kodi::addon::PVRMenuhook&
       return PVR_ERROR_REJECTED;
 
     std::vector<std::string> items(12);
-    items[0].append("Status : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
-            .append(Myth::RecStatusToString(m_control->CheckService(), pinfo.Status())).append("[/COLOR]");
-    items[1].append("RecordID : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
-            .append(Myth::IdToString(pinfo.RecordID())).append("[/COLOR]");
-    items[2].append("StartTime : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
-            .append(Myth::TimeToString(pinfo.RecordingStartTime())).append("[/COLOR]");
-    items[3].append("EndTime : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
-            .append(Myth::TimeToString(pinfo.RecordingEndTime())).append("[/COLOR]");
-    items[4].append("ChannelName : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
-            .append(pinfo.ChannelName()).append("[/COLOR]");
-    items[5].append("FileName : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
-            .append(pinfo.FileName()).append("[/COLOR]");
-    items[6].append("StorageGroup : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
-            .append(pinfo.StorageGroup()).append("[/COLOR]");
-    items[7].append("HostName : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
-            .append(pinfo.HostName()).append("[/COLOR]");
+    items[0].append("Status : [COLOR white]").append(Myth::RecStatusToString(m_control->CheckService(), pinfo.Status())).append("[/COLOR]");
+    items[1].append("RecordID : [COLOR white]").append(Myth::IdToString(pinfo.RecordID())).append("[/COLOR]");
+    items[2].append("StartTime : [COLOR white]").append(Myth::TimeToString(pinfo.RecordingStartTime())).append("[/COLOR]");
+    items[3].append("EndTime : [COLOR white]").append(Myth::TimeToString(pinfo.RecordingEndTime())).append("[/COLOR]");
+    items[4].append("ChannelName : [COLOR white]").append(pinfo.ChannelName()).append("[/COLOR]");
+    items[5].append("FileName : [COLOR white]").append(pinfo.FileName()).append("[/COLOR]");
+    items[6].append("StorageGroup : [COLOR white]").append(pinfo.StorageGroup()).append("[/COLOR]");
+    items[7].append("HostName : [COLOR white]").append(pinfo.HostName()).append("[/COLOR]");
 
-    items[8].append("ProgramFlags : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]");
+    items[8].append("ProgramFlags : [COLOR white]");
     unsigned pf = pinfo.GetPtr()->programFlags;
     items[8].append((pf & 0x00001) ? "0 " : "");
     items[8].append((pf & 0x00002) ? "1 " : "");
@@ -2731,7 +2727,7 @@ PVR_ERROR PVRClientMythTV::CallRecordingMenuHook(const kodi::addon::PVRMenuhook&
     items[8].append((pf & 0x20000) ? "H " : "");
     items[8].append("[/COLOR]");
 
-    items[9].append("AudioProps : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]");
+    items[9].append("AudioProps : [COLOR white]");
     unsigned ap = pinfo.GetPtr()->audioProps;
     items[9].append((ap & 0x01) ? "0 " : "");
     items[9].append((ap & 0x02) ? "1 " : "");
@@ -2741,7 +2737,7 @@ PVR_ERROR PVRClientMythTV::CallRecordingMenuHook(const kodi::addon::PVRMenuhook&
     items[9].append((ap & 0x20) ? "5 " : "");
     items[9].append("[/COLOR]");
 
-    items[10].append("VideoProps : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]");
+    items[10].append("VideoProps : [COLOR white]");
     unsigned vp = pinfo.GetPtr()->videoProps;
     items[10].append((vp & 0x01) ? "0 " : "");
     items[10].append((vp & 0x02) ? "1 " : "");
@@ -2752,7 +2748,7 @@ PVR_ERROR PVRClientMythTV::CallRecordingMenuHook(const kodi::addon::PVRMenuhook&
     items[10].append((vp & 0x40) ? "6 " : "");
     items[10].append("[/COLOR]");
 
-    items[11].append("FrameRate : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]");
+    items[11].append("FrameRate : [COLOR white]");
     if (pinfo.GetPropsVideoFrameRate() > 0.0)
       items[11].append(std::to_string(pinfo.GetPropsVideoFrameRate()));
     items[11].append("[/COLOR]");
@@ -2779,14 +2775,10 @@ PVR_ERROR PVRClientMythTV::CallTimerMenuHook(const kodi::addon::PVRMenuhook& men
     if (prog)
     {
       std::vector<std::string> items(4);
-      items[0].append("Status : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
-              .append(Myth::RecStatusToString(m_control->CheckService(), prog->Status())).append("[/COLOR]");
-      items[1].append("RecordID : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
-              .append(Myth::IdToString(prog->RecordID())).append("[/COLOR]");
-      items[2].append("StartTime : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
-              .append(Myth::TimeToString(prog->RecordingStartTime())).append("[/COLOR]");
-      items[3].append("EndTime : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
-              .append(Myth::TimeToString(prog->RecordingEndTime())).append("[/COLOR]");
+      items[0].append("Status : [COLOR white]").append(Myth::RecStatusToString(m_control->CheckService(), prog->Status())).append("[/COLOR]");
+      items[1].append("RecordID : [COLOR white]").append(Myth::IdToString(prog->RecordID())).append("[/COLOR]");
+      items[2].append("StartTime : [COLOR white]").append(Myth::TimeToString(prog->RecordingStartTime())).append("[/COLOR]");
+      items[3].append("EndTime : [COLOR white]").append(Myth::TimeToString(prog->RecordingEndTime())).append("[/COLOR]");
       kodi::gui::dialogs::Select::Show(item.GetTitle(), items);
     }
     return PVR_ERROR_NO_ERROR;
