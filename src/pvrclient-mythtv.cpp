@@ -1454,6 +1454,7 @@ PVR_ERROR PVRClientMythTV::GetRecordingLastPlayedPosition(const kodi::addon::PVR
     }
     if (CMythSettings::GetExtraDebug())
       kodi::Log(ADDON_LOG_DEBUG, "%s: Recording %s has no bookmark", __FUNCTION__, recording.GetTitle().c_str());
+    return PVR_ERROR_NO_ERROR;
   }
   else
     kodi::Log(ADDON_LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.GetRecordingId().c_str());
