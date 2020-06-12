@@ -27,7 +27,7 @@
 
 class PVRClientLauncherPrivate;
 
-class PVRClientLauncher
+class ATTRIBUTE_HIDDEN PVRClientLauncher
 {
 public:
   PVRClientLauncher(PVRClientMythTV* client);

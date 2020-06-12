@@ -24,16 +24,15 @@
 #include "MythScheduleHelper76.h"
 #include "MythScheduleHelper85.h"
 #include "MythScheduleHelper91.h"
-#include "../client.h"
 #include "../tools.h"
+#include "../settings.h"
 #include "private/cppdef.h"
 #include "private/os/threads/mutex.h"
+
 
 #include <cstdio>
 #include <cassert>
 #include <math.h>
-
-using namespace ADDON;
 
 enum
 {
@@ -167,27 +166,27 @@ void MythScheduleManager::Setup()
     if (m_protoVersion >= 91)
     {
       m_versionHelper = new MythScheduleHelper91(this, m_control);
-      XBMC->Log(LOG_DEBUG, "Using MythScheduleHelper91 and inherited functions");
+      kodi::Log(ADDON_LOG_DEBUG, "Using MythScheduleHelper91 and inherited functions");
     }
     else if (m_protoVersion >= 85)
     {
       m_versionHelper = new MythScheduleHelper85(this, m_control);
-      XBMC->Log(LOG_DEBUG, "Using MythScheduleHelper85 and inherited functions");
+      kodi::Log(ADDON_LOG_DEBUG, "Using MythScheduleHelper85 and inherited functions");
     }
     else if (m_protoVersion >= 76)
     {
       m_versionHelper = new MythScheduleHelper76(this, m_control);
-      XBMC->Log(LOG_DEBUG, "Using MythScheduleHelper76 and inherited functions");
+      kodi::Log(ADDON_LOG_DEBUG, "Using MythScheduleHelper76 and inherited functions");
     }
     else if (m_protoVersion >= 75)
     {
       m_versionHelper = new MythScheduleHelper75(this, m_control);
-      XBMC->Log(LOG_DEBUG, "Using MythScheduleHelper75 and inherited functions");
+      kodi::Log(ADDON_LOG_DEBUG, "Using MythScheduleHelper75 and inherited functions");
     }
     else
     {
       m_versionHelper = new MythScheduleHelperNoHelper();
-      XBMC->Log(LOG_DEBUG, "Using MythScheduleHelperNoHelper");
+      kodi::Log(ADDON_LOG_DEBUG, "Using MythScheduleHelperNoHelper");
     }
   }
 }
@@ -288,7 +287,7 @@ MythScheduleManager::MSM_ERROR MythScheduleManager::UpdateTimer(const MythTimerE
     {
       if (entry.epgCheck && entry.epgInfo.IsNull())
       {
-        XBMC->Log(LOG_ERROR, "%s: index %u requires valid EPG info", __FUNCTION__, entry.entryIndex);
+        kodi::Log(ADDON_LOG_ERROR, "%s: index %u requires valid EPG info", __FUNCTION__, entry.entryIndex);
         return MSM_ERROR_NOT_IMPLEMENTED;
       }
       MythRecordingRule newrule = m_versionHelper->NewFromTimer(entry, false);
@@ -341,7 +340,7 @@ MythScheduleManager::MSM_ERROR MythScheduleManager::DeleteModifier(uint32_t inde
   MythRecordingRuleNodePtr node = FindRuleById(recording->RecordID());
   if (node && node->IsOverrideRule())
   {
-    XBMC->Log(LOG_DEBUG, "%s: Deleting modifier rule %u relates recording %u", __FUNCTION__, node->m_rule.RecordID(), index);
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Deleting modifier rule %u relates recording %u", __FUNCTION__, node->m_rule.RecordID(), index);
     return DeleteRecordingRule(node->m_rule.RecordID());
   }
   return MSM_ERROR_FAILED;
@@ -361,9 +360,9 @@ MythScheduleManager::MSM_ERROR MythScheduleManager::DisableRecording(uint32_t in
   MythRecordingRuleNodePtr node = FindRuleById(recording->RecordID());
   if (node)
   {
-    XBMC->Log(LOG_DEBUG, "%s: %u : %s:%s on channel %s program %s",
+    kodi::Log(ADDON_LOG_DEBUG, "%s: %u : %s:%s on channel %s program %s",
               __FUNCTION__, index, recording->Title().c_str(), recording->Subtitle().c_str(), recording->Callsign().c_str(), recording->UID().c_str());
-    XBMC->Log(LOG_DEBUG, "%s: %u : Found rule %u type %d with recording status %d",
+    kodi::Log(ADDON_LOG_DEBUG, "%s: %u : Found rule %u type %d with recording status %d",
               __FUNCTION__, index, (unsigned)node->m_rule.RecordID(), (int)node->m_rule.Type(), recording->Status());
     int method = METHOD_UNKNOWN;
     MythRecordingRule handle = node->m_rule.DuplicateRecordingRule();
@@ -408,7 +407,7 @@ MythScheduleManager::MSM_ERROR MythScheduleManager::DisableRecording(uint32_t in
         break;
     }
 
-    XBMC->Log(LOG_DEBUG, "%s: %u : Dealing with the problem using method %d", __FUNCTION__, index, method);
+    kodi::Log(ADDON_LOG_DEBUG, "%s: %u : Dealing with the problem using method %d", __FUNCTION__, index, method);
     switch (method)
     {
       case METHOD_UPDATE_INACTIVE:
@@ -420,14 +419,14 @@ MythScheduleManager::MSM_ERROR MythScheduleManager::DisableRecording(uint32_t in
 
       case METHOD_CREATE_DONTRECORD:
         handle = m_versionHelper->MakeDontRecord(handle, *recording);
-        XBMC->Log(LOG_DEBUG, "%s: %u : Creating Override for %u (%s: %s) on %u (%s)"
+        kodi::Log(ADDON_LOG_DEBUG, "%s: %u : Creating Override for %u (%s: %s) on %u (%s)"
                   , __FUNCTION__, index, (unsigned)handle.ParentID(), handle.Title().c_str(),
                   handle.Subtitle().c_str(), handle.ChannelID(), handle.Callsign().c_str());
 
         // If currently recording then stop it without overriding
         if (recording->Status() == Myth::RS_RECORDING || recording->Status() == Myth::RS_TUNING)
         {
-          XBMC->Log(LOG_DEBUG, "%s: Stop recording %s", __FUNCTION__, recording->UID().c_str());
+          kodi::Log(ADDON_LOG_DEBUG, "%s: Stop recording %s", __FUNCTION__, recording->UID().c_str());
           m_control->StopRecording(*(recording->GetPtr()));
         }
         else
@@ -459,9 +458,9 @@ MythScheduleManager::MSM_ERROR MythScheduleManager::EnableRecording(uint32_t ind
   MythRecordingRuleNodePtr node = FindRuleById(recording->RecordID());
   if (node)
   {
-    XBMC->Log(LOG_DEBUG, "%s: %u : %s:%s on channel %s program %s",
+    kodi::Log(ADDON_LOG_DEBUG, "%s: %u : %s:%s on channel %s program %s",
               __FUNCTION__, index, recording->Title().c_str(), recording->Subtitle().c_str(), recording->Callsign().c_str(), recording->UID().c_str());
-    XBMC->Log(LOG_DEBUG, "%s: %u : Found rule %u type %d disabled by status %d",
+    kodi::Log(ADDON_LOG_DEBUG, "%s: %u : Found rule %u type %d disabled by status %d",
               __FUNCTION__, index, (unsigned)node->m_rule.RecordID(), (int)node->m_rule.Type(), recording->Status());
     int method = METHOD_UNKNOWN;
     MythRecordingRule handle = node->m_rule.DuplicateRecordingRule();
@@ -482,7 +481,7 @@ MythScheduleManager::MSM_ERROR MythScheduleManager::EnableRecording(uint32_t ind
         break;
     }
 
-    XBMC->Log(LOG_DEBUG, "%s: %u : Dealing with the problem using method %d", __FUNCTION__, index, method);
+    kodi::Log(ADDON_LOG_DEBUG, "%s: %u : Dealing with the problem using method %d", __FUNCTION__, index, method);
     switch (method)
     {
       case METHOD_UPDATE_INACTIVE:
@@ -494,7 +493,7 @@ MythScheduleManager::MSM_ERROR MythScheduleManager::EnableRecording(uint32_t ind
 
       case METHOD_CREATE_OVERRIDE:
         handle = m_versionHelper->MakeOverride(handle, *recording);
-        XBMC->Log(LOG_DEBUG, "%s: %u : Creating Override for %u (%s:%s) on %u (%s)"
+        kodi::Log(ADDON_LOG_DEBUG, "%s: %u : Creating Override for %u (%s:%s) on %u (%s)"
                   , __FUNCTION__, index, (unsigned)handle.ParentID(), handle.Title().c_str(),
                   handle.Subtitle().c_str(), handle.ChannelID(), handle.Callsign().c_str());
 
@@ -524,13 +523,13 @@ MythScheduleManager::MSM_ERROR MythScheduleManager::UpdateRecording(uint32_t ind
   MythRecordingRuleNodePtr node = FindRuleById(recording->RecordID());
   if (node)
   {
-    XBMC->Log(LOG_DEBUG, "%s: %u : Found rule %u type %d and recording status %d",
+    kodi::Log(ADDON_LOG_DEBUG, "%s: %u : Found rule %u type %d and recording status %d",
               __FUNCTION__, index, (unsigned)node->m_rule.RecordID(), (int)node->m_rule.Type(), recording->Status());
 
     // Prior handle inactive
     if (!node->m_rule.Inactive() && newrule.Inactive())
     {
-      XBMC->Log(LOG_DEBUG, "%s: Disable recording", __FUNCTION__);
+      kodi::Log(ADDON_LOG_DEBUG, "%s: Disable recording", __FUNCTION__);
       return DisableRecording(index);
     }
 
@@ -600,7 +599,7 @@ MythScheduleManager::MSM_ERROR MythScheduleManager::UpdateRecording(uint32_t ind
         break;
     }
 
-    XBMC->Log(LOG_DEBUG, "%s: %u : Dealing with the problem using method %d", __FUNCTION__, index, method);
+    kodi::Log(ADDON_LOG_DEBUG, "%s: %u : Dealing with the problem using method %d", __FUNCTION__, index, method);
     switch (method)
     {
       case METHOD_NOOP:
@@ -614,7 +613,7 @@ MythScheduleManager::MSM_ERROR MythScheduleManager::UpdateRecording(uint32_t ind
 
       case METHOD_CREATE_OVERRIDE:
         handle = m_versionHelper->MakeOverride(handle, *recording);
-        XBMC->Log(LOG_DEBUG, "%s: %u : Creating Override for %u (%s: %s) on %u (%s)"
+        kodi::Log(ADDON_LOG_DEBUG, "%s: %u : Creating Override for %u (%s: %s) on %u (%s)"
                   , __FUNCTION__, index, (unsigned)node->m_rule.RecordID(), node->m_rule.Title().c_str(),
                   node->m_rule.Subtitle().c_str(), recording->ChannelID(), recording->Callsign().c_str());
 
@@ -646,44 +645,44 @@ MythScheduleManager::MSM_ERROR MythScheduleManager::DeleteRecordingRule(uint32_t
   MythRecordingRuleNodePtr node = FindRuleByIndex(index);
   if (node)
   {
-    XBMC->Log(LOG_DEBUG, "%s: Found rule %u type %d", __FUNCTION__, (unsigned)node->m_rule.RecordID(), (int)node->m_rule.Type());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Found rule %u type %d", __FUNCTION__, (unsigned)node->m_rule.RecordID(), (int)node->m_rule.Type());
 
     // Delete overrides and their related recording
     if (node->HasOverrideRules())
     {
       for (MythRecordingRuleList::iterator ito = node->m_overrideRules.begin(); ito != node->m_overrideRules.end(); ++ito)
       {
-        XBMC->Log(LOG_DEBUG, "%s: Found override rule %u type %d", __FUNCTION__, (unsigned)ito->RecordID(), (int)ito->Type());
+        kodi::Log(ADDON_LOG_DEBUG, "%s: Found override rule %u type %d", __FUNCTION__, (unsigned)ito->RecordID(), (int)ito->Type());
         MythScheduleList rec = FindUpComingByRuleId(ito->RecordID());
         for (MythScheduleList::iterator itr = rec.begin(); itr != rec.end(); ++itr)
         {
-          XBMC->Log(LOG_DEBUG, "%s: Found overriden recording %s status %d", __FUNCTION__, itr->second->UID().c_str(), itr->second->Status());
+          kodi::Log(ADDON_LOG_DEBUG, "%s: Found overriden recording %s status %d", __FUNCTION__, itr->second->UID().c_str(), itr->second->Status());
           if (itr->second->Status() == Myth::RS_RECORDING || itr->second->Status() == Myth::RS_TUNING)
           {
-            XBMC->Log(LOG_DEBUG, "%s: Stop recording %s", __FUNCTION__, itr->second->UID().c_str());
+            kodi::Log(ADDON_LOG_DEBUG, "%s: Stop recording %s", __FUNCTION__, itr->second->UID().c_str());
             m_control->StopRecording(*(itr->second->GetPtr()));
           }
         }
-        XBMC->Log(LOG_DEBUG, "%s: Deleting recording rule %u (modifier of rule %u)", __FUNCTION__, (unsigned)ito->RecordID(), (unsigned)node->m_rule.RecordID());
+        kodi::Log(ADDON_LOG_DEBUG, "%s: Deleting recording rule %u (modifier of rule %u)", __FUNCTION__, (unsigned)ito->RecordID(), (unsigned)node->m_rule.RecordID());
         if (!m_control->RemoveRecordSchedule(ito->RecordID()))
-          XBMC->Log(LOG_ERROR, "%s: Deleting recording rule failed", __FUNCTION__);
+          kodi::Log(ADDON_LOG_ERROR, "%s: Deleting recording rule failed", __FUNCTION__);
       }
     }
     // Delete related recordings
     MythScheduleList rec = FindUpComingByRuleId(node->m_rule.RecordID());
     for (MythScheduleList::iterator itr = rec.begin(); itr != rec.end(); ++itr)
     {
-      XBMC->Log(LOG_DEBUG, "%s: Found recording %s status %d", __FUNCTION__, itr->second->UID().c_str(), itr->second->Status());
+      kodi::Log(ADDON_LOG_DEBUG, "%s: Found recording %s status %d", __FUNCTION__, itr->second->UID().c_str(), itr->second->Status());
       if (itr->second->Status() == Myth::RS_RECORDING || itr->second->Status() == Myth::RS_TUNING)
       {
-        XBMC->Log(LOG_DEBUG, "%s: Stop recording %s", __FUNCTION__, itr->second->UID().c_str());
+        kodi::Log(ADDON_LOG_DEBUG, "%s: Stop recording %s", __FUNCTION__, itr->second->UID().c_str());
         m_control->StopRecording(*(itr->second->GetPtr()));
       }
     }
     // Delete rule
-    XBMC->Log(LOG_DEBUG, "%s: Deleting recording rule %u", __FUNCTION__, node->m_rule.RecordID());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Deleting recording rule %u", __FUNCTION__, node->m_rule.RecordID());
     if (!m_control->RemoveRecordSchedule(node->m_rule.RecordID()))
-      XBMC->Log(LOG_ERROR, "%s: Deleting recording rule failed", __FUNCTION__);
+      kodi::Log(ADDON_LOG_ERROR, "%s: Deleting recording rule failed", __FUNCTION__);
   }
   // Another client could delete the rule at the same time. Therefore always SUCCESS even if database delete fails.
   return MSM_ERROR_SUCCESS;
@@ -699,7 +698,7 @@ MythScheduleManager::MSM_ERROR MythScheduleManager::UpdateRecordingRule(uint32_t
   MythRecordingRuleNodePtr node = FindRuleByIndex(index);
   if (node)
   {
-    XBMC->Log(LOG_DEBUG, "%s: Found rule %u type %d",
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Found rule %u type %d",
               __FUNCTION__, (unsigned)node->m_rule.RecordID(), (int)node->m_rule.Type());
     int method = METHOD_UNKNOWN;
     MythRecordingRule handle = node->m_rule.DuplicateRecordingRule();
@@ -757,7 +756,7 @@ MythScheduleManager::MSM_ERROR MythScheduleManager::UpdateRecordingRule(uint32_t
         handle.SetDuplicateControlMethod(newrule.DuplicateControlMethod());
     }
 
-    XBMC->Log(LOG_DEBUG, "%s: Dealing with the problem using method %d", __FUNCTION__, method);
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Dealing with the problem using method %d", __FUNCTION__, method);
     switch (method)
     {
       case METHOD_NOOP:
@@ -922,14 +921,14 @@ void MythScheduleManager::Update()
     }
   }
 
-  if (g_bExtraDebug)
+  if (CMythSettings::GetExtraDebug())
   {
     for (NodeList::iterator it = new_rules->begin(); it != new_rules->end(); ++it)
-      XBMC->Log(LOG_DEBUG, "%s: Rule node - recordid: %u, parentid: %u, type: %d, overriden: %s", __FUNCTION__,
+      kodi::Log(ADDON_LOG_DEBUG, "%s: Rule node - recordid: %u, parentid: %u, type: %d, overriden: %s", __FUNCTION__,
               (unsigned)(*it)->m_rule.RecordID(), (unsigned)(*it)->m_rule.ParentID(),
               (int)(*it)->m_rule.Type(), ((*it)->HasOverrideRules() ? "Yes" : "No"));
     for (RecordingList::iterator it = new_recordings->begin(); it != new_recordings->end(); ++it)
-      XBMC->Log(LOG_DEBUG, "%s: Recording - recordid: %u, index: %u, status: %d, title: %s", __FUNCTION__,
+      kodi::Log(ADDON_LOG_DEBUG, "%s: Recording - recordid: %u, index: %u, status: %d, title: %s", __FUNCTION__,
               (unsigned)it->second->RecordID(), (unsigned)it->first, it->second->Status(), it->second->Title().c_str());
   }
 
@@ -982,13 +981,13 @@ MythRecordingRuleList MythScheduleManager::GetTemplateRules() const
 
 bool MythScheduleManager::ToggleShowNotRecording()
 {
-  g_bShowNotRecording ^= true;
-  return g_bShowNotRecording;
+  CMythSettings::ToogleShowNotRecording();
+  return CMythSettings::GetShowNotRecording();
 }
 
 bool MythScheduleManager::ShowNotRecording()
 {
-  return g_bShowNotRecording;
+  return CMythSettings::GetShowNotRecording();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1014,54 +1013,21 @@ MythTimerType::MythTimerType(TimerTypeId id, unsigned attributes, const std::str
 , m_recGroupDefault(recGroupDefault)
 { }
 
-void MythTimerType::Fill(PVR_TIMER_TYPE* type) const
+void MythTimerType::Fill(kodi::addon::PVRTimerType& type) const
 {
-  memset(type, 0, sizeof(PVR_TIMER_TYPE));
-  type->iId = m_id;
-  type->iAttributes = m_attributes;
-  PVR_STRCPY(type->strDescription, m_description.c_str());
+  type.SetId(m_id);
+  type.SetAttributes(m_attributes);
+  type.SetDescription(m_description);
 
   // Fill priorities
-  type->iPrioritiesSize = m_priorityList.size();
-  assert(type->iPrioritiesSize <= PVR_ADDON_TIMERTYPE_VALUES_ARRAY_SIZE);
-  unsigned index = 0;
-  for (AttributeList::const_iterator it = m_priorityList.begin(); it != m_priorityList.end(); ++it, ++index)
-  {
-    type->priorities[index].iValue = it->first;
-    PVR_STRCPY(type->priorities[index].strDescription, it->second.c_str());
-  }
-  type->iPrioritiesDefault = m_priorityDefault;
+  type.SetPriorities(m_priorityList, m_priorityDefault);
 
   // Fill duplicate methodes
-  type->iPreventDuplicateEpisodesSize = m_dupMethodList.size();
-  assert(type->iPreventDuplicateEpisodesSize <= PVR_ADDON_TIMERTYPE_VALUES_ARRAY_SIZE);
-  index = 0;
-  for (AttributeList::const_iterator it = m_dupMethodList.begin(); it != m_dupMethodList.end(); ++it, ++index)
-  {
-    type->preventDuplicateEpisodes[index].iValue = it->first;
-    PVR_STRCPY(type->preventDuplicateEpisodes[index].strDescription, it->second.c_str());
-  }
-  type->iPreventDuplicateEpisodesDefault = m_dupMethodDefault;
+  type.SetPreventDuplicateEpisodes(m_dupMethodList, m_dupMethodDefault);
 
   // Fill expirations
-  type->iLifetimesSize = m_expirationList.size();
-  assert(type->iLifetimesSize <= PVR_ADDON_TIMERTYPE_VALUES_ARRAY_SIZE);
-  index = 0;
-  for (AttributeList::const_iterator it = m_expirationList.begin(); it != m_expirationList.end(); ++it, ++index)
-  {
-    type->lifetimes[index].iValue = it->first;
-    PVR_STRCPY(type->lifetimes[index].strDescription, it->second.c_str());
-  }
-  type->iLifetimesDefault = m_expirationDefault;
+  type.SetLifetimes(m_expirationList, m_expirationDefault);
 
   // Fill recording groups
-  type->iRecordingGroupSize = m_recGroupList.size();
-  assert(type->iRecordingGroupSize <= PVR_ADDON_TIMERTYPE_VALUES_ARRAY_SIZE);
-  index = 0;
-  for (AttributeList::const_iterator it = m_recGroupList.begin(); it != m_recGroupList.end(); ++it, ++index)
-  {
-    type->recordingGroup[index].iValue = it->first;
-    PVR_STRCPY(type->recordingGroup[index].strDescription, it->second.c_str());
-  }
-  type->iRecordingGroupDefault = m_recGroupDefault;
+  type.SetRecordingGroups(m_recGroupList, m_recGroupDefault);
 }

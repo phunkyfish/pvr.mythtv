@@ -21,15 +21,11 @@
  */
 
 #include "filestreaming.h"
-#include "client.h"
 
 #define MAX_READ_SIZE  131072
 
-using namespace ADDON;
-
 FileStreaming::FileStreaming(const std::string& filePath)
 : m_valid(false)
-, m_file(0)
 , m_flen(0)
 , m_pos(0)
 {
@@ -38,8 +34,6 @@ FileStreaming::FileStreaming(const std::string& filePath)
 
 FileStreaming::~FileStreaming()
 {
-  if (m_file)
-    XBMC->CloseFile(m_file);
 }
 
 int FileStreaming::Read(void* buffer, unsigned n)
@@ -53,7 +47,7 @@ int FileStreaming::Read(void* buffer, unsigned n)
   unsigned r = n;
   do
   {
-    size_t s = XBMC->ReadFile(m_file, b, r);
+    size_t s = m_file.Read(b, r);
     if (s > 0)
     {
       r -= s;
@@ -66,11 +60,11 @@ int FileStreaming::Read(void* buffer, unsigned n)
       if (eof)
         break;
       eof = true;
-      XBMC->SeekFile(m_file, 0, 0);
+      m_file.Seek(0, 0);
     }
   } while (r > 0 || eof);
   if (eof)
-    XBMC->Log(LOG_DEBUG, "%s: EOF", __FUNCTION__);
+    kodi::Log(ADDON_LOG_DEBUG, "%s: EOF", __FUNCTION__);
   return (int)(n -r);
 }
 
@@ -80,15 +74,15 @@ int64_t FileStreaming::Seek(int64_t offset, Myth::WHENCE_t whence)
   {
   case Myth::WHENCE_SET:
     if (offset <= GetSize() && offset >= 0)
-      return (m_pos = XBMC->SeekFile(m_file, offset, 0));
+      return (m_pos = m_file.Seek(offset, 0));
     break;
   case Myth::WHENCE_CUR:
     if ((m_pos + offset) <= GetSize() && m_pos + offset >= 0)
-      return (m_pos = XBMC->SeekFile(m_file, m_pos + offset, 0));
+      return (m_pos = m_file.Seek(m_pos + offset, 0));
     break;
   case Myth::WHENCE_END:
     if (offset >= 0 && (GetSize() - offset) >= 0)
-      return (m_pos = XBMC->SeekFile(m_file, GetSize() - offset, 0));
+      return (m_pos = m_file.Seek(GetSize() - offset, 0));
     break;
   default:
     break;
@@ -98,13 +92,11 @@ int64_t FileStreaming::Seek(int64_t offset, Myth::WHENCE_t whence)
 
 bool FileStreaming::_init(const char* filePath)
 {
-  m_file = XBMC->OpenFile(filePath, 0);
-  if (m_file)
+  if (m_file.OpenFile(filePath, 0))
   {
-    m_flen = XBMC->GetFileLength(m_file);
+    m_flen = m_file.GetLength();
     return true;
   }
-  XBMC->Log(LOG_DEBUG, "%s: cannot open file '%s'", __FUNCTION__, filePath);
+  kodi::Log(ADDON_LOG_DEBUG, "%s: cannot open file '%s'", __FUNCTION__, filePath);
   return false;
 }
-

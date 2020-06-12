@@ -24,14 +24,13 @@
 ////
 
 #include "MythScheduleHelper75.h"
-#include "../client.h"
 #include "../tools.h"
+#include "../settings.h"
 #include "private/os/threads/mutex.h"
 
 #include <cstdio>
 #include <cassert>
-
-using namespace ADDON;
+#include <kodi/General.h>
 
 MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
 {
@@ -45,8 +44,8 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
     MythTimerType::AttributeList autoExpireList;
     int autoExpire0 = GetRuleExpirationId(RuleExpiration(false, 0, false));
     int autoExpire1 = GetRuleExpirationId(RuleExpiration(true, 0, false));
-    autoExpireList.push_back(std::make_pair(autoExpire0, XBMC->GetLocalizedString(30506))); // Recordings never expire
-    autoExpireList.push_back(std::make_pair(autoExpire1, XBMC->GetLocalizedString(30507))); // Allow recordings to expire
+    autoExpireList.emplace_back(autoExpire0, kodi::GetLocalizedString(30506)); // Recordings never expire
+    autoExpireList.emplace_back(autoExpire1, kodi::GetLocalizedString(30507)); // Allow recordings to expire
 
     m_timerTypeList.push_back(MythTimerTypePtr(new MythTimerType(TIMER_TYPE_MANUAL_SEARCH,
             PVR_TIMER_TYPE_IS_MANUAL |
@@ -58,7 +57,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
             PVR_TIMER_TYPE_SUPPORTS_PRIORITY |
             PVR_TIMER_TYPE_SUPPORTS_LIFETIME |
             PVR_TIMER_TYPE_SUPPORTS_RECORDING_GROUP,
-            XBMC->GetLocalizedString(30460), // Manual
+            kodi::GetLocalizedString(30460), // Manual
             GetRulePriorityList(),
             GetRulePriorityDefaultId(),
             emptyList,
@@ -78,7 +77,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
             PVR_TIMER_TYPE_SUPPORTS_PRIORITY |
             PVR_TIMER_TYPE_SUPPORTS_LIFETIME |
             PVR_TIMER_TYPE_SUPPORTS_RECORDING_GROUP,
-            XBMC->GetLocalizedString(30465), // Record this
+            kodi::GetLocalizedString(30465), // Record this
             GetRulePriorityList(),
             GetRulePriorityDefaultId(),
             emptyList,
@@ -99,7 +98,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
             PVR_TIMER_TYPE_SUPPORTS_PRIORITY |
             PVR_TIMER_TYPE_SUPPORTS_LIFETIME |
             PVR_TIMER_TYPE_SUPPORTS_RECORDING_GROUP,
-            XBMC->GetLocalizedString(30461), // Record one
+            kodi::GetLocalizedString(30461), // Record one
             GetRulePriorityList(),
             GetRulePriorityDefaultId(),
             GetRuleDupMethodList(),
@@ -122,7 +121,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
             PVR_TIMER_TYPE_SUPPORTS_PRIORITY |
             PVR_TIMER_TYPE_SUPPORTS_LIFETIME |
             PVR_TIMER_TYPE_SUPPORTS_RECORDING_GROUP,
-            XBMC->GetLocalizedString(30462), // Record weekly
+            kodi::GetLocalizedString(30462), // Record weekly
             GetRulePriorityList(),
             GetRulePriorityDefaultId(),
             emptyList,
@@ -146,7 +145,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
             PVR_TIMER_TYPE_SUPPORTS_PRIORITY |
             PVR_TIMER_TYPE_SUPPORTS_LIFETIME |
             PVR_TIMER_TYPE_SUPPORTS_RECORDING_GROUP,
-            XBMC->GetLocalizedString(30463), // Record daily
+            kodi::GetLocalizedString(30463), // Record daily
             GetRulePriorityList(),
             GetRulePriorityDefaultId(),
             GetRuleDupMethodList(),
@@ -167,7 +166,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
             PVR_TIMER_TYPE_SUPPORTS_PRIORITY |
             PVR_TIMER_TYPE_SUPPORTS_LIFETIME |
             PVR_TIMER_TYPE_SUPPORTS_RECORDING_GROUP,
-            XBMC->GetLocalizedString(30464), // Record all
+            kodi::GetLocalizedString(30464), // Record all
             GetRulePriorityList(),
             GetRulePriorityDefaultId(),
             GetRuleDupMethodList(),
@@ -186,7 +185,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
             PVR_TIMER_TYPE_SUPPORTS_PRIORITY |
             PVR_TIMER_TYPE_SUPPORTS_LIFETIME |
             PVR_TIMER_TYPE_SUPPORTS_RECORDING_GROUP,
-            XBMC->GetLocalizedString(30466), // Record series
+            kodi::GetLocalizedString(30466), // Record series
             GetRulePriorityList(),
             GetRulePriorityDefaultId(),
             GetRuleDupMethodList(),
@@ -207,7 +206,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
             PVR_TIMER_TYPE_SUPPORTS_PRIORITY |
             PVR_TIMER_TYPE_SUPPORTS_LIFETIME |
             PVR_TIMER_TYPE_SUPPORTS_RECORDING_GROUP,
-            XBMC->GetLocalizedString(30467), // Search keyword
+            kodi::GetLocalizedString(30467), // Search keyword
             GetRulePriorityList(),
             GetRulePriorityDefaultId(),
             GetRuleDupMethodList(),
@@ -228,7 +227,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
             PVR_TIMER_TYPE_SUPPORTS_PRIORITY |
             PVR_TIMER_TYPE_SUPPORTS_LIFETIME |
             PVR_TIMER_TYPE_SUPPORTS_RECORDING_GROUP,
-            XBMC->GetLocalizedString(30468), // Search people
+            kodi::GetLocalizedString(30468), // Search people
             GetRulePriorityList(),
             GetRulePriorityDefaultId(),
             GetRuleDupMethodList(),
@@ -247,7 +246,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
             PVR_TIMER_TYPE_SUPPORTS_PRIORITY |
             PVR_TIMER_TYPE_SUPPORTS_LIFETIME |
             PVR_TIMER_TYPE_SUPPORTS_RECORDING_GROUP,
-            XBMC->GetLocalizedString(30451), // Unhandled
+            kodi::GetLocalizedString(30451), // Unhandled
             GetRulePriorityList(),
             GetRulePriorityDefaultId(),
             GetRuleDupMethodList(),
@@ -264,7 +263,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
             PVR_TIMER_TYPE_SUPPORTS_PRIORITY |
             PVR_TIMER_TYPE_SUPPORTS_LIFETIME |
             PVR_TIMER_TYPE_SUPPORTS_RECORDING_GROUP,
-            XBMC->GetLocalizedString(30469), // Rule Disabled
+            kodi::GetLocalizedString(30469), // Rule Disabled
             GetRulePriorityList(),
             GetRulePriorityDefaultId(),
             emptyList,
@@ -281,7 +280,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
             PVR_TIMER_TYPE_SUPPORTS_PRIORITY |
             PVR_TIMER_TYPE_SUPPORTS_LIFETIME |
             PVR_TIMER_TYPE_SUPPORTS_RECORDING_GROUP,
-            XBMC->GetLocalizedString(30452), // Upcoming
+            kodi::GetLocalizedString(30452), // Upcoming
             GetRulePriorityList(),
             GetRulePriorityDefaultId(),
             emptyList,
@@ -298,7 +297,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
             PVR_TIMER_TYPE_SUPPORTS_PRIORITY |
             PVR_TIMER_TYPE_SUPPORTS_LIFETIME |
             PVR_TIMER_TYPE_SUPPORTS_RECORDING_GROUP,
-            XBMC->GetLocalizedString(30457), // Alternative
+            kodi::GetLocalizedString(30457), // Alternative
             GetRulePriorityList(),
             GetRulePriorityDefaultId(),
             emptyList,
@@ -315,7 +314,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
             PVR_TIMER_TYPE_SUPPORTS_PRIORITY |
             PVR_TIMER_TYPE_SUPPORTS_LIFETIME |
             PVR_TIMER_TYPE_SUPPORTS_RECORDING_GROUP,
-            XBMC->GetLocalizedString(30458), // Currently recorded
+            kodi::GetLocalizedString(30458), // Currently recorded
             GetRulePriorityList(),
             GetRulePriorityDefaultId(),
             emptyList,
@@ -332,7 +331,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
             PVR_TIMER_TYPE_SUPPORTS_PRIORITY |
             PVR_TIMER_TYPE_SUPPORTS_LIFETIME |
             PVR_TIMER_TYPE_SUPPORTS_RECORDING_GROUP,
-            XBMC->GetLocalizedString(30459), // Expired recording
+            kodi::GetLocalizedString(30459), // Expired recording
             GetRulePriorityList(),
             GetRulePriorityDefaultId(),
             emptyList,
@@ -349,7 +348,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
             PVR_TIMER_TYPE_SUPPORTS_PRIORITY |
             PVR_TIMER_TYPE_SUPPORTS_LIFETIME |
             PVR_TIMER_TYPE_SUPPORTS_RECORDING_GROUP,
-            XBMC->GetLocalizedString(30453), // Overriden
+            kodi::GetLocalizedString(30453), // Overriden
             GetRulePriorityList(),
             GetRulePriorityDefaultId(),
             emptyList,
@@ -365,7 +364,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
             PVR_TIMER_TYPE_SUPPORTS_CHANNELS |
             PVR_TIMER_TYPE_SUPPORTS_START_TIME |
             PVR_TIMER_TYPE_SUPPORTS_END_TIME,
-            XBMC->GetLocalizedString(30454), // Don't record
+            kodi::GetLocalizedString(30454), // Don't record
             emptyList,
             0, // n&v
             emptyList,
@@ -377,7 +376,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
 
     m_timerTypeList.push_back(MythTimerTypePtr(new MythTimerType(TIMER_TYPE_UPCOMING_MANUAL,
             PVR_TIMER_TYPE_IS_READONLY,
-            XBMC->GetLocalizedString(30455), // Upcoming manual
+            kodi::GetLocalizedString(30455), // Upcoming manual
             emptyList,
             0, // n&v
             emptyList,
@@ -389,7 +388,7 @@ MythTimerTypeList MythScheduleHelper75::GetTimerTypes() const
 
     m_timerTypeList.push_back(MythTimerTypePtr(new MythTimerType(TIMER_TYPE_ZOMBIE,
             PVR_TIMER_TYPE_IS_READONLY,
-            XBMC->GetLocalizedString(30456), // Zombie
+            kodi::GetLocalizedString(30456), // Zombie
             emptyList,
             0, // n&v
             emptyList,
@@ -480,8 +479,8 @@ bool MythScheduleHelper75::FillTimerEntryWithRule(MythTimerEntry& entry, const M
   entry.isRule = true;
 
   MythRecordingRule rule = node.GetRule();
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "75::%s: Rule %u", __FUNCTION__, rule.RecordID());
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "75::%s: Rule %u", __FUNCTION__, rule.RecordID());
 
   switch (rule.Type())
   {
@@ -666,8 +665,8 @@ bool MythScheduleHelper75::FillTimerEntryWithUpcoming(MythTimerEntry& entry, con
     case Myth::RS_PREVIOUS_RECORDING: //Previoulsy recorded but no longer in the library
       if (!m_manager->ShowNotRecording())
       {
-        if (g_bExtraDebug)
-          XBMC->Log(LOG_DEBUG, "75::%s: Skipping %s:%s on %s because status %d", __FUNCTION__,
+        if (CMythSettings::GetExtraDebug())
+          kodi::Log(ADDON_LOG_DEBUG, "75::%s: Skipping %s:%s on %s because status %d", __FUNCTION__,
                   recording.Title().c_str(), recording.Subtitle().c_str(), recording.ChannelName().c_str(),
                   recording.Status());
         return false;
@@ -778,7 +777,7 @@ MythRecordingRule MythScheduleHelper75::NewFromTemplate(const MythEPGInfo& epgIn
 {
   MythRecordingRule rule;
   // Load rule template from selected provider
-  switch (g_iRecTemplateType)
+  switch (CMythSettings::GetRecTemplateType())
   {
   case 1: // Template provider is 'MythTV', then load the template from backend.
     if (!epgInfo.IsNull())
@@ -802,7 +801,7 @@ MythRecordingRule MythScheduleHelper75::NewFromTemplate(const MythEPGInfo& epgIn
       }
       if (tplIt != templates.end())
       {
-        XBMC->Log(LOG_INFO, "75::%s: Overriding the rule with template %u '%s'", __FUNCTION__, (unsigned)tplIt->RecordID(), tplIt->Title().c_str());
+        kodi::Log(ADDON_LOG_INFO, "75::%s: Overriding the rule with template %u '%s'", __FUNCTION__, (unsigned)tplIt->RecordID(), tplIt->Title().c_str());
         rule.SetPriority(tplIt->Priority());
         rule.SetStartOffset(tplIt->StartOffset());
         rule.SetEndOffset(tplIt->EndOffset());
@@ -827,19 +826,19 @@ MythRecordingRule MythScheduleHelper75::NewFromTemplate(const MythEPGInfo& epgIn
         rule.SetCategory(tplIt->Category());
       }
       else
-        XBMC->Log(LOG_INFO, "75::%s: No template found for the category '%s'", __FUNCTION__, epgInfo.Category().c_str());
+        kodi::Log(ADDON_LOG_INFO, "75::%s: No template found for the category '%s'", __FUNCTION__, epgInfo.Category().c_str());
     }
     break;
   case 0: // Template provider is 'Internal', then set rule with settings
-    rule.SetAutoCommFlag(g_bRecAutoCommFlag);
-    rule.SetAutoMetadata(g_bRecAutoMetadata);
-    rule.SetAutoTranscode(g_bRecAutoTranscode);
-    rule.SetUserJob(1, g_bRecAutoRunJob1);
-    rule.SetUserJob(2, g_bRecAutoRunJob2);
-    rule.SetUserJob(3, g_bRecAutoRunJob3);
-    rule.SetUserJob(4, g_bRecAutoRunJob4);
-    rule.SetAutoExpire(g_bRecAutoExpire);
-    rule.SetTranscoder(g_iRecTranscoder);
+    rule.SetAutoCommFlag(CMythSettings::GetRecAutoCommFlag());
+    rule.SetAutoMetadata(CMythSettings::GetRecAutoMetadata());
+    rule.SetAutoTranscode(CMythSettings::GetRecAutoTranscode());
+    rule.SetUserJob(1, CMythSettings::GetRecAutoRunJob1());
+    rule.SetUserJob(2, CMythSettings::GetRecAutoRunJob2());
+    rule.SetUserJob(3, CMythSettings::GetRecAutoRunJob3());
+    rule.SetUserJob(4, CMythSettings::GetRecAutoRunJob4());
+    rule.SetAutoExpire(CMythSettings::GetRecAutoExpire());
+    rule.SetTranscoder(CMythSettings::GetRecTranscoder());
     // set defaults
     rule.SetPriority(GetRulePriorityDefaultId());
     rule.SetDuplicateControlMethod(static_cast<Myth::DM_t>(GetRuleDupMethodDefaultId()));
@@ -857,7 +856,7 @@ MythRecordingRule MythScheduleHelper75::NewFromTemplate(const MythEPGInfo& epgIn
       if (categoryOverTime && !categoryOverTime->value.empty())
       {
         int offset = atoi(categoryOverTime->value.c_str());
-        XBMC->Log(LOG_DEBUG, "75::%s: Overriding end offset for category %s: +%d", __FUNCTION__, overTimeCategory->value.c_str(), offset);
+        kodi::Log(ADDON_LOG_DEBUG, "75::%s: Overriding end offset for category %s: +%d", __FUNCTION__, overTimeCategory->value.c_str(), offset);
         rule.SetEndOffset(offset);
       }
     }
@@ -871,7 +870,7 @@ MythRecordingRule MythScheduleHelper75::NewFromTimer(const MythTimerEntry& entry
   // that which is applied in function 'FillTimerEntry'
 
   MythRecordingRule rule;
-  XBMC->Log(LOG_DEBUG, "75::%s", __FUNCTION__);
+  kodi::Log(ADDON_LOG_DEBUG, "75::%s", __FUNCTION__);
   // default required fields start, end time
   time_t now = time(0);
   rule.SetStartTime(now);
@@ -1258,7 +1257,7 @@ MythRecordingRule MythScheduleHelper75::NewFromTimer(const MythTimerEntry& entry
       break;
   }
   rule.SetType(Myth::RT_UNKNOWN);
-  XBMC->Log(LOG_ERROR, "75::%s: Invalid timer %u: TYPE=%d CHANID=%u SIGN=%s ST=%u ET=%u", __FUNCTION__, entry.entryIndex,
+  kodi::Log(ADDON_LOG_ERROR, "75::%s: Invalid timer %u: TYPE=%d CHANID=%u SIGN=%s ST=%u ET=%u", __FUNCTION__, entry.entryIndex,
           entry.timerType, entry.chanid, entry.callsign.c_str(), (unsigned)entry.startTime, (unsigned)entry.endTime);
   return rule;
 }
@@ -1340,10 +1339,10 @@ const MythTimerType::AttributeList& MythScheduleHelper75::GetRulePriorityList() 
       if (i)
       {
         snprintf(buf, sizeof(buf), "%+2d", i);
-        m_priorityList.push_back(std::make_pair(i, buf));
+        m_priorityList.emplace_back(i, buf);
       }
       else
-        m_priorityList.push_back(std::make_pair(0, "0"));
+        m_priorityList.emplace_back(0, "0");
     }
   }
   return m_priorityList;
@@ -1354,11 +1353,11 @@ const MythTimerType::AttributeList& MythScheduleHelper75::GetRuleDupMethodList()
   if (!m_dupMethodListInit)
   {
     m_dupMethodListInit = true;
-    m_dupMethodList.push_back(std::make_pair(static_cast<int>(Myth::DM_CheckNone), XBMC->GetLocalizedString(30501)));
-    m_dupMethodList.push_back(std::make_pair(static_cast<int>(Myth::DM_CheckSubtitle), XBMC->GetLocalizedString(30502)));
-    m_dupMethodList.push_back(std::make_pair(static_cast<int>(Myth::DM_CheckDescription), XBMC->GetLocalizedString(30503)));
-    m_dupMethodList.push_back(std::make_pair(static_cast<int>(Myth::DM_CheckSubtitleAndDescription), XBMC->GetLocalizedString(30504)));
-    m_dupMethodList.push_back(std::make_pair(static_cast<int>(Myth::DM_CheckSubtitleThenDescription), XBMC->GetLocalizedString(30505)));
+    m_dupMethodList.emplace_back(static_cast<int>(Myth::DM_CheckNone), kodi::GetLocalizedString(30501));
+    m_dupMethodList.emplace_back(static_cast<int>(Myth::DM_CheckSubtitle), kodi::GetLocalizedString(30502));
+    m_dupMethodList.emplace_back(static_cast<int>(Myth::DM_CheckDescription), kodi::GetLocalizedString(30503));
+    m_dupMethodList.emplace_back(static_cast<int>(Myth::DM_CheckSubtitleAndDescription), kodi::GetLocalizedString(30504));
+    m_dupMethodList.emplace_back(static_cast<int>(Myth::DM_CheckSubtitleThenDescription), kodi::GetLocalizedString(30505));
   }
   return m_dupMethodList;
 }
@@ -1375,19 +1374,19 @@ const MythScheduleHelperNoHelper::RuleExpirationMap& MythScheduleHelper75::GetRu
     int index = (EXPIRATION_NEVER_EXPIRE_ID < EXPIRATION_ALLOW_EXPIRE_ID ? EXPIRATION_NEVER_EXPIRE_ID : EXPIRATION_ALLOW_EXPIRE_ID) - 100;
     for (int i = 100; i >= 1; --i)
     {
-      snprintf(buf, sizeof(buf), XBMC->GetLocalizedString(30509), i); // Keep %d newest and expire old
+      snprintf(buf, sizeof(buf), kodi::GetLocalizedString(30509).c_str(), i); // Keep %d newest and expire old
       m_expirationMap.insert(std::make_pair(index++, std::make_pair(RuleExpiration(false,i,true), buf)));
     }
 
     // Insert cases 'auto expire'
-    m_expirationMap.insert(std::make_pair(EXPIRATION_NEVER_EXPIRE_ID, std::make_pair(RuleExpiration(false, 0, false), XBMC->GetLocalizedString(30506)))); // Recordings never expire
-    m_expirationMap.insert(std::make_pair(EXPIRATION_ALLOW_EXPIRE_ID, std::make_pair(RuleExpiration(true, 0, false), XBMC->GetLocalizedString(30507)))); // Allow recordings to expire
+    m_expirationMap.insert(std::make_pair(EXPIRATION_NEVER_EXPIRE_ID, std::make_pair(RuleExpiration(false, 0, false), kodi::GetLocalizedString(30506)))); // Recordings never expire
+    m_expirationMap.insert(std::make_pair(EXPIRATION_ALLOW_EXPIRE_ID, std::make_pair(RuleExpiration(true, 0, false), kodi::GetLocalizedString(30507)))); // Allow recordings to expire
 
     // Insert cases 'keep up'
     index = (EXPIRATION_ALLOW_EXPIRE_ID > EXPIRATION_NEVER_EXPIRE_ID ? EXPIRATION_ALLOW_EXPIRE_ID : EXPIRATION_NEVER_EXPIRE_ID) + 1;
     for (int i = 2; i <= 100; ++i)
     {
-      snprintf(buf, sizeof(buf), XBMC->GetLocalizedString(30508), i); // Keep up to %d recordings
+      snprintf(buf, sizeof(buf), kodi::GetLocalizedString(30508).c_str(), i); // Keep up to %d recordings
       m_expirationMap.insert(std::make_pair(index++, std::make_pair(RuleExpiration(false,i,false), buf)));
     }
   }
@@ -1406,7 +1405,7 @@ const MythTimerType::AttributeList& MythScheduleHelper75::GetRuleRecordingGroupL
     {
       if (*it == RECGROUP_DFLT_NAME)
       {
-        m_recGroupList.push_back(std::make_pair(index++, RECGROUP_DFLT_NAME));
+        m_recGroupList.emplace_back(index++, RECGROUP_DFLT_NAME);
         ++count;
       }
     }
@@ -1417,10 +1416,10 @@ const MythTimerType::AttributeList& MythScheduleHelper75::GetRuleRecordingGroupL
       {
         if (count == PVR_ADDON_TIMERTYPE_VALUES_ARRAY_SIZE)
         {
-          XBMC->Log(LOG_INFO, "75::%s: List overflow (%d): %u remaining value(s) are not loaded", __FUNCTION__, count, (unsigned)(strl->size() - count));
+          kodi::Log(ADDON_LOG_INFO, "75::%s: List overflow (%d): %u remaining value(s) are not loaded", __FUNCTION__, count, (unsigned)(strl->size() - count));
           break;
         }
-        m_recGroupList.push_back(std::make_pair(index++, *it));
+        m_recGroupList.emplace_back(index++, *it);
         ++count;
       }
     }

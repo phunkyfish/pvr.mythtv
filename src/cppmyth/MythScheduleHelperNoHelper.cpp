@@ -24,8 +24,9 @@
 ////
 
 #include "MythScheduleHelperNoHelper.h"
-#include "../client.h"
 #include "private/os/threads/mutex.h"
+
+#include <kodi/General.h>
 
 MythScheduleHelperNoHelper::MythScheduleHelperNoHelper()
 : m_lock(new Myth::OS::CMutex)
@@ -116,8 +117,8 @@ int MythScheduleHelperNoHelper::GetRuleExpirationId(const RuleExpiration& expira
   {
     m_expirationByKeyInit = true;
     const RuleExpirationMap& expirationMap = GetRuleExpirationMap();
-    for (RuleExpirationMap::const_iterator it = expirationMap.begin(); it != expirationMap.end(); ++it)
-      m_expirationByKey.insert(std::make_pair(expiration_key(it->second.first), it->first));
+    for (const auto& expiration : expirationMap)
+      m_expirationByKey.emplace(expiration_key(expiration.second.first), expiration.first);
   }
   std::map<uint32_t, int>::const_iterator it = m_expirationByKey.find(expiration_key(expiration));
   if (it != m_expirationByKey.end())
@@ -142,8 +143,8 @@ int MythScheduleHelperNoHelper::GetRuleRecordingGroupId(const std::string& name)
   {
     m_recGroupByNameInit = true;
     const MythTimerType::AttributeList& groupList = GetRuleRecordingGroupList();
-    for (MythTimerType::AttributeList::const_iterator it = groupList.begin(); it != groupList.end(); ++it)
-      m_recGroupByName.insert(std::make_pair(it->second, it->first));
+    for (const auto& group : groupList)
+      m_recGroupByName.emplace(group.GetDescription(), group.GetValue());
   }
   std::map<std::string, int>::const_iterator it = m_recGroupByName.find(name);
   if (it != m_recGroupByName.end())
@@ -159,9 +160,9 @@ std::string MythScheduleHelperNoHelper::GetRuleRecordingGroupName(int id) const
   {
     m_recGroupByIdInit = true;
     const MythTimerType::AttributeList& groupList = GetRuleRecordingGroupList();
-    for (MythTimerType::AttributeList::const_iterator it = groupList.begin(); it != groupList.end(); ++it)
+    for (const auto& group : groupList)
     {
-      m_recGroupById.insert(std::make_pair(it->first, it->second));
+      m_recGroupById.emplace(group.GetValue(), group.GetDescription());
     }
   }
   std::map<int, std::string>::const_iterator it = m_recGroupById.find(id);
@@ -175,7 +176,7 @@ const MythTimerType::AttributeList& MythScheduleHelperNoHelper::GetRulePriorityL
   if (!m_priorityListInit)
   {
     m_priorityListInit = true;
-    m_priorityList.push_back(std::make_pair(0, "0"));
+    m_priorityList.emplace_back(0, "0");
   }
   return m_priorityList;
 }
@@ -185,7 +186,7 @@ const MythTimerType::AttributeList& MythScheduleHelperNoHelper::GetRuleDupMethod
   if (!m_dupMethodListInit)
   {
     m_dupMethodListInit = true;
-    m_dupMethodList.push_back(std::make_pair(static_cast<int>(Myth::DM_CheckNone), XBMC->GetLocalizedString(30501))); // Don't match duplicates
+    m_dupMethodList.emplace_back(static_cast<int>(Myth::DM_CheckNone), kodi::GetLocalizedString(30501)); // Don't match duplicates
   }
   return m_dupMethodList;
 }
@@ -195,8 +196,8 @@ const MythScheduleHelperNoHelper::RuleExpirationMap& MythScheduleHelperNoHelper:
   if (!m_expirationMapInit)
   {
     m_expirationMapInit = true;
-    m_expirationMap.insert(std::make_pair(EXPIRATION_NEVER_EXPIRE_ID, std::make_pair(RuleExpiration(false, 0, false), XBMC->GetLocalizedString(30506)))); // Allow recordings to expire
-    m_expirationMap.insert(std::make_pair(EXPIRATION_ALLOW_EXPIRE_ID, std::make_pair(RuleExpiration(true, 0, false), XBMC->GetLocalizedString(30507)))); // Allow recordings to expire
+    m_expirationMap.insert(std::make_pair(EXPIRATION_NEVER_EXPIRE_ID, std::make_pair(RuleExpiration(false, 0, false), kodi::GetLocalizedString(30506)))); // Allow recordings to expire
+    m_expirationMap.insert(std::make_pair(EXPIRATION_ALLOW_EXPIRE_ID, std::make_pair(RuleExpiration(true, 0, false), kodi::GetLocalizedString(30507)))); // Allow recordings to expire
   }
   return m_expirationMap;
 }
@@ -207,8 +208,8 @@ const MythTimerType::AttributeList& MythScheduleHelperNoHelper::GetRuleExpiratio
   {
     m_expirationListInit = true;
     const RuleExpirationMap& expirationMap = GetRuleExpirationMap();
-    for (RuleExpirationMap::const_iterator it = expirationMap.begin(); it != expirationMap.end(); ++it)
-      m_expirationList.push_back(std::make_pair(it->first, it->second.second));
+    for (const auto& expiration : expirationMap)
+      m_expirationList.emplace_back(expiration.first, expiration.second.second);
   }
   return m_expirationList;
 }
@@ -218,7 +219,7 @@ const MythTimerType::AttributeList& MythScheduleHelperNoHelper::GetRuleRecording
   if (!m_recGroupListInit)
   {
     m_recGroupListInit = true;
-    m_recGroupList.push_back(std::make_pair(RECGROUP_DFLT_ID, RECGROUP_DFLT_NAME));
+    m_recGroupList.emplace_back(RECGROUP_DFLT_ID, RECGROUP_DFLT_NAME);
   }
   return m_recGroupList;
 }

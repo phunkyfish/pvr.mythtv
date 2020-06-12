@@ -21,9 +21,11 @@
  *
  */
 
+#include <kodi/Filesystem.h>
+
 #include <mythstream.h>
 
-class FileStreaming : public Myth::Stream
+class ATTRIBUTE_HIDDEN FileStreaming : public Myth::Stream
 {
 public:
   FileStreaming(const std::string& filePath);
@@ -38,7 +40,7 @@ public:
 
 private:
   bool m_valid;
-  void* m_file;
+  kodi::vfs::CFile m_file;
   int64_t m_flen;
   int64_t m_pos;
 

@@ -20,44 +20,43 @@
  *
  */
 
-#include <kodi/xbmc_pvr_types.h>
-
 #include "avinfo.h"
+#include "pvrclient-mythtv.h"
+#include "settings.h"
 #include "demuxer/debug.h"
 
 #define LOGTAG                  "[AVINFO] "
-
-using namespace ADDON;
 
 void AVInfoLog(int level, char *msg)
 {
   if (msg && level != DEMUX_DBG_NONE)
   {
-    bool doLog = g_bExtraDebug;
-    addon_log_t loglevel = LOG_DEBUG;
+    bool doLog = CMythSettings::GetExtraDebug();
+    AddonLog loglevel = ADDON_LOG_DEBUG;
     switch (level)
     {
     case DEMUX_DBG_ERROR:
-      loglevel = LOG_ERROR;
+      loglevel = ADDON_LOG_ERROR;
       doLog = true;
       break;
     case DEMUX_DBG_WARN:
     case DEMUX_DBG_INFO:
-      loglevel = LOG_INFO;
+      loglevel = ADDON_LOG_INFO;
       break;
     case DEMUX_DBG_DEBUG:
     case DEMUX_DBG_PARSE:
     case DEMUX_DBG_ALL:
-      loglevel = LOG_DEBUG;
+      loglevel = ADDON_LOG_DEBUG;
       break;
     }
-    if (XBMC && doLog)
-      XBMC->Log(loglevel, LOGTAG "%s", msg);
+    if (doLog)
+      kodi::Log(loglevel, LOGTAG "%s", msg);
   }
 }
 
-AVInfo::AVInfo(Myth::Stream* file)
-: m_file(file)
+AVInfo::AVInfo(PVRClientMythTV& client, Myth::Stream* file)
+: m_client(client)
+, m_file(file)
 , m_channel(1)
 , m_av_buf_size(AV_BUFFER_SIZE)
 , m_av_pos(0)
@@ -76,7 +75,7 @@ AVInfo::AVInfo(Myth::Stream* file)
     m_av_rbs = m_av_buf;
     m_av_rbe = m_av_buf;
 
-    if (g_bExtraDebug)
+    if (CMythSettings::GetExtraDebug())
       TSDemux::DBGLevel(DEMUX_DBG_DEBUG);
     else
       TSDemux::DBGLevel(DEMUX_DBG_ERROR);
@@ -88,20 +87,19 @@ AVInfo::AVInfo(Myth::Stream* file)
   }
   else
   {
-    XBMC->Log(LOG_ERROR, LOGTAG "alloc AV buffer failed");
+    kodi::Log(ADDON_LOG_ERROR, LOGTAG "alloc AV buffer failed");
   }
 }
 
 AVInfo::~AVInfo()
 {
   // Free AV context
-  if (m_AVContext)
-    SAFE_DELETE(m_AVContext);
+  delete m_AVContext;
   // Free AV buffer
   if (m_av_buf)
   {
-    if (g_bExtraDebug)
-      XBMC->Log(LOG_DEBUG, LOGTAG "free AV buffer: allocated size was %zu", m_av_buf_size);
+    if (CMythSettings::GetExtraDebug())
+      kodi::Log(ADDON_LOG_DEBUG, LOGTAG "free AV buffer: allocated size was %zu", m_av_buf_size);
     free(m_av_buf);
     m_av_buf = NULL;
   }
@@ -165,7 +163,7 @@ void AVInfo::Process()
 {
   if (!m_AVContext)
   {
-    XBMC->Log(LOG_ERROR, LOGTAG "%s: no AVContext", __FUNCTION__);
+    kodi::Log(ADDON_LOG_ERROR, LOGTAG "%s: no AVContext", __FUNCTION__);
     return;
   }
 
@@ -207,7 +205,7 @@ void AVInfo::Process()
     }
 
     if (ret < 0)
-      XBMC->Log(LOG_INFO, LOGTAG "%s: error %d", __FUNCTION__, ret);
+      kodi::Log(ADDON_LOG_INFO, LOGTAG "%s: error %d", __FUNCTION__, ret);
 
     if (ret == TSDemux::AVCONTEXT_TS_ERROR)
       throughput = static_cast<size_t>(m_AVContext->Shift());
@@ -217,7 +215,7 @@ void AVInfo::Process()
 
   m_AVStatus = ret;
   m_file->Seek(0, Myth::WHENCE_SET);
-  XBMC->Log(LOG_DEBUG, LOGTAG "%s: terminated with status %d", __FUNCTION__, ret);
+  kodi::Log(ADDON_LOG_DEBUG, LOGTAG "%s: terminated with status %d", __FUNCTION__, ret);
 }
 
 bool AVInfo::GetMainStream(STREAM_AVINFO *info) const
@@ -277,26 +275,26 @@ bool AVInfo::get_stream_data(TSDemux::STREAM_PKT* pkt)
 void AVInfo::populate_pvr_streams()
 {
   uint16_t mainPid = 0xffff;
-  int mainType = XBMC_CODEC_TYPE_UNKNOWN;
+  int mainType = PVR_CODEC_TYPE_UNKNOWN;
   const std::vector<TSDemux::ElementaryStream*> es_streams = m_AVContext->GetStreams();
   for (std::vector<TSDemux::ElementaryStream*>::const_iterator it = es_streams.begin(); it != es_streams.end(); it++)
   {
     const char* codec_name = (*it)->GetStreamCodecName();
-    xbmc_codec_t codec = PVR->GetCodecByName(codec_name);
-    if (codec.codec_type != XBMC_CODEC_TYPE_UNKNOWN)
+    kodi::addon::PVRCodec codec = m_client.GetCodecByName(codec_name);
+    if (codec.GetCodecType() != PVR_CODEC_TYPE_UNKNOWN)
     {
       // Find the main stream:
       // The best candidate would be the first video. Else the first audio
       switch (mainType)
       {
-      case XBMC_CODEC_TYPE_VIDEO:
+      case PVR_CODEC_TYPE_VIDEO:
         break;
-      case XBMC_CODEC_TYPE_AUDIO:
-        if (codec.codec_type != XBMC_CODEC_TYPE_VIDEO)
+      case PVR_CODEC_TYPE_AUDIO:
+        if (codec.GetCodecType() != PVR_CODEC_TYPE_VIDEO)
           break;
       default:
         mainPid = (*it)->pid;
-        mainType = codec.codec_type;
+        mainType = codec.GetCodecType();
       }
       // Allow streaming for the PID
       m_AVContext->StartStreaming((*it)->pid);
@@ -304,8 +302,8 @@ void AVInfo::populate_pvr_streams()
       if (!(*it)->has_stream_info)
         m_nosetup.insert((*it)->pid);
 
-      if (g_bExtraDebug)
-        XBMC->Log(LOG_DEBUG, LOGTAG "%s: register PES %.4x %s", __FUNCTION__, (*it)->pid, codec_name);
+      if (CMythSettings::GetExtraDebug())
+        kodi::Log(ADDON_LOG_DEBUG, LOGTAG "%s: register PES %.4x %s", __FUNCTION__, (*it)->pid, codec_name);
     }
   }
   // Renew main stream
@@ -318,8 +316,8 @@ bool AVInfo::update_pvr_stream(uint16_t pid)
   if (!es)
     return false;
 
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, LOGTAG "%s: update info PES %.4x %s", __FUNCTION__, es->pid, es->GetStreamCodecName());
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, LOGTAG "%s: update info PES %.4x %s", __FUNCTION__, es->pid, es->GetStreamCodecName());
 
   if (es->has_stream_info)
   {
@@ -329,7 +327,7 @@ bool AVInfo::update_pvr_stream(uint16_t pid)
     {
       m_nosetup.erase(it);
       if (m_nosetup.empty())
-        XBMC->Log(LOG_DEBUG, LOGTAG "%s: setup is completed", __FUNCTION__);
+        kodi::Log(ADDON_LOG_DEBUG, LOGTAG "%s: setup is completed", __FUNCTION__);
     }
   }
   return true;

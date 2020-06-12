@@ -27,13 +27,10 @@
 ////
 
 #include "MythScheduleHelper91.h"
-#include "../client.h"
 #include "../tools.h"
 
 #include <cstdio>
 #include <cassert>
-
-using namespace ADDON;
 
 MythRecordingRule MythScheduleHelper91::NewFromTimer(const MythTimerEntry& entry, bool withTemplate)
 {
@@ -41,7 +38,7 @@ MythRecordingRule MythScheduleHelper91::NewFromTimer(const MythTimerEntry& entry
   // that which is applied in function 'FillTimerEntry'
 
   MythRecordingRule rule;
-  XBMC->Log(LOG_DEBUG, "91::%s", __FUNCTION__);
+  kodi::Log(ADDON_LOG_DEBUG, "91::%s", __FUNCTION__);
   if (withTemplate)
   {
     // Base on template
@@ -420,7 +417,7 @@ MythRecordingRule MythScheduleHelper91::NewFromTimer(const MythTimerEntry& entry
       break;
   }
   rule.SetType(Myth::RT_UNKNOWN);
-  XBMC->Log(LOG_ERROR, "91::%s: Invalid timer %u: TYPE=%d CHANID=%u SIGN=%s ST=%u ET=%u", __FUNCTION__, entry.entryIndex,
+  kodi::Log(ADDON_LOG_ERROR, "91::%s: Invalid timer %u: TYPE=%d CHANID=%u SIGN=%s ST=%u ET=%u", __FUNCTION__, entry.entryIndex,
           entry.timerType, entry.chanid, entry.callsign.c_str(), (unsigned)entry.startTime, (unsigned)entry.endTime);
   return rule;
 }
