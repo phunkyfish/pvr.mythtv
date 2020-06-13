@@ -41,13 +41,11 @@
 ////
 
 #include "MythScheduleHelper76.h"
-#include "../client.h"
 #include "../tools.h"
+#include "../settings.h"
 
 #include <cstdio>
 #include <cassert>
-
-using namespace ADDON;
 
 bool MythScheduleHelper76::FillTimerEntryWithRule(MythTimerEntry& entry, const MythRecordingRuleNode& node) const
 {
@@ -58,8 +56,8 @@ bool MythScheduleHelper76::FillTimerEntryWithRule(MythTimerEntry& entry, const M
   entry.isRule = true;
 
   MythRecordingRule rule = node.GetRule();
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "76::%s: RecordID %u", __FUNCTION__, rule.RecordID());
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "76::%s: RecordID %u", __FUNCTION__, rule.RecordID());
 
   switch (rule.Type())
   {
@@ -244,7 +242,7 @@ MythRecordingRule MythScheduleHelper76::NewFromTimer(const MythTimerEntry& entry
   // that which is applied in function 'FillTimerEntry'
 
   MythRecordingRule rule;
-  XBMC->Log(LOG_DEBUG, "76::%s", __FUNCTION__);
+  kodi::Log(ADDON_LOG_DEBUG, "76::%s", __FUNCTION__);
   // default required fields start, end time
   time_t now = time(0);
   rule.SetStartTime(now);
@@ -628,7 +626,7 @@ MythRecordingRule MythScheduleHelper76::NewFromTimer(const MythTimerEntry& entry
       break;
   }
   rule.SetType(Myth::RT_UNKNOWN);
-  XBMC->Log(LOG_ERROR, "76::%s: Invalid timer %u: TYPE=%d CHANID=%u SIGN=%s ST=%u ET=%u", __FUNCTION__, entry.entryIndex,
+  kodi::Log(ADDON_LOG_ERROR, "76::%s: Invalid timer %u: TYPE=%d CHANID=%u SIGN=%s ST=%u ET=%u", __FUNCTION__, entry.entryIndex,
           entry.timerType, entry.chanid, entry.callsign.c_str(), (unsigned)entry.startTime, (unsigned)entry.endTime);
   return rule;
 }

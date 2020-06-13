@@ -24,8 +24,9 @@
 #include "cppmyth.h"
 #include "artworksmanager.h"
 #include "categories.h"
+#include "settings.h"
 
-#include <kodi/xbmc_pvr_types.h>
+#include <kodi/addon-instance/PVR.h>
 #include <mythsharedptr.h>
 #include <mythcontrol.h>
 #include <mytheventhandler.h>
@@ -40,10 +41,10 @@
 class FileStreaming;
 class TaskHandler;
 
-class PVRClientMythTV : public Myth::EventSubscriber
+class ATTRIBUTE_HIDDEN PVRClientMythTV : public kodi::addon::CInstancePVRClient, public Myth::EventSubscriber
 {
 public:
-  PVRClientMythTV();
+  PVRClientMythTV(KODI_HANDLE instance, const std::string& version);
   virtual ~PVRClientMythTV();
 
   // Server
@@ -56,21 +57,24 @@ public:
     CONN_ERROR_API_UNAVAILABLE,
   } CONN_ERROR;
 
-  void SetDebug(bool silent = false);
   bool Connect();
   CONN_ERROR GetConnectionError() const;
-  unsigned GetBackendAPIVersion();
-  const char *GetBackendName();
-  const char *GetBackendVersion();
-  const char *GetConnectionString();
-  PVR_ERROR GetDriveSpace(long long *iTotal, long long *iUsed);
-  void OnSleep();
-  void OnWake();
-  void OnDeactivatedGUI();
-  void OnActivatedGUI();
+//   const char *GetConnectionString();
+
+  PVR_ERROR GetCapabilities(kodi::addon::PVRCapabilities& capabilities) override;
+  PVR_ERROR GetBackendName(std::string& name) override;
+  PVR_ERROR GetBackendVersion(std::string& version) override;
+  PVR_ERROR GetBackendHostname(std::string& hostname) override;
+  PVR_ERROR GetConnectionString(std::string& connection) override;
+
+  PVR_ERROR GetDriveSpace(uint64_t& total, uint64_t& used) override;
+  PVR_ERROR OnSystemSleep() override;
+  PVR_ERROR OnSystemWake() override;
+  PVR_ERROR OnPowerSavingActivated() override;
+  PVR_ERROR OnPowerSavingDeactivated() override;
 
   // Implements EventSubscriber
-  void HandleBackendMessage(Myth::EventMessagePtr msg);
+  void HandleBackendMessage(Myth::EventMessagePtr msg) override;
   void HandleChannelChange();
   void HandleScheduleChange();
   void HandleAskRecording(const Myth::EventMessage& msg);
@@ -79,61 +83,62 @@ public:
   void RunHouseKeeping();
 
   // EPG
-  PVR_ERROR GetEPGForChannel(ADDON_HANDLE handle, int iChannelUid, time_t iStart, time_t iEnd);
+  PVR_ERROR GetEPGForChannel(int channelUid, time_t start, time_t end, kodi::addon::PVREPGTagsResultSet& results) override;
 
   // Channels
-  int GetNumChannels();
-  PVR_ERROR GetChannels(ADDON_HANDLE handle, bool bRadio);
+  PVR_ERROR GetChannelsAmount(int& amount) override;
+  PVR_ERROR GetChannels(bool radio, kodi::addon::PVRChannelsResultSet& results) override;
 
   // Channel groups
-  int GetChannelGroupsAmount();
-  PVR_ERROR GetChannelGroups(ADDON_HANDLE handle, bool bRadio);
-  PVR_ERROR GetChannelGroupMembers(ADDON_HANDLE handle, const PVR_CHANNEL_GROUP &group);
+  PVR_ERROR GetChannelGroupsAmount(int& amount) override;
+  PVR_ERROR GetChannelGroups(bool radio, kodi::addon::PVRChannelGroupsResultSet& results) override;
+  PVR_ERROR GetChannelGroupMembers(const kodi::addon::PVRChannelGroup& group, kodi::addon::PVRChannelGroupMembersResultSet& results) override;
 
   // Recordings
-  int GetRecordingsAmount();
-  PVR_ERROR GetRecordings(ADDON_HANDLE handle);
-  int GetDeletedRecordingsAmount();
-  PVR_ERROR GetDeletedRecordings(ADDON_HANDLE handle);
-  PVR_ERROR DeleteRecording(const PVR_RECORDING &recording);
-  PVR_ERROR DeleteAndForgetRecording(const PVR_RECORDING &recording);
-  PVR_ERROR SetRecordingPlayCount(const PVR_RECORDING &recording, int count);
-  PVR_ERROR SetRecordingLastPlayedPosition(const PVR_RECORDING &recording, int lastplayedposition);
-  int GetRecordingLastPlayedPosition(const PVR_RECORDING &recording);
-  PVR_ERROR GetRecordingEdl(const PVR_RECORDING &recording, PVR_EDL_ENTRY entries[], int *size);
-  PVR_ERROR UndeleteRecording(const PVR_RECORDING &recording);
-  PVR_ERROR PurgeDeletedRecordings();
-  PVR_ERROR GetRecordingSize(const PVR_RECORDING &recording, int64_t *bytes);
+  PVR_ERROR GetRecordingsAmount(bool deleted, int& amount) override;
+  PVR_ERROR GetRecordings(bool deleted, kodi::addon::PVRRecordingsResultSet& results) override;
+  PVR_ERROR DeleteRecording(const kodi::addon::PVRRecording& recording) override;
+  PVR_ERROR SetRecordingPlayCount(const kodi::addon::PVRRecording& recording, int count) override;
+  PVR_ERROR SetRecordingLastPlayedPosition(const kodi::addon::PVRRecording& recording, int lastplayedposition) override;
+  PVR_ERROR GetRecordingLastPlayedPosition(const kodi::addon::PVRRecording& recording, int& position) override;
+  PVR_ERROR GetRecordingEdl(const kodi::addon::PVRRecording& recording, std::vector<kodi::addon::PVREDLEntry>& edl) override;
+  PVR_ERROR UndeleteRecording(const kodi::addon::PVRRecording& recording) override;
+  PVR_ERROR DeleteAllRecordingsFromTrash() override;
+  PVR_ERROR GetRecordingSize(const kodi::addon::PVRRecording& recording, int64_t& size) override;
 
   // Timers
-  int GetTimersAmount();
-  PVR_ERROR GetTimers(ADDON_HANDLE handle);
-  PVR_ERROR AddTimer(const PVR_TIMER &timer);
-  PVR_ERROR DeleteTimer(const PVR_TIMER &timer, bool force);
-  PVR_ERROR UpdateTimer(const PVR_TIMER &timer);
-  PVR_ERROR GetTimerTypes(PVR_TIMER_TYPE types[], int *size);
+  PVR_ERROR GetTimersAmount(int& amount) override;
+  PVR_ERROR GetTimers(kodi::addon::PVRTimersResultSet& results) override;
+  PVR_ERROR AddTimer(const kodi::addon::PVRTimer& timer) override;
+  PVR_ERROR DeleteTimer(const kodi::addon::PVRTimer& timer, bool forceDelete) override;
+  PVR_ERROR UpdateTimer(const kodi::addon::PVRTimer& timer) override;
+  PVR_ERROR GetTimerTypes(std::vector<kodi::addon::PVRTimerType>& types) override;
 
   // LiveTV
-  bool OpenLiveStream(const PVR_CHANNEL &channel);
-  void CloseLiveStream();
-  int ReadLiveStream(unsigned char *pBuffer, unsigned int iBufferSize);
-  long long SeekLiveStream(long long iPosition, int iWhence);
-  long long LengthLiveStream();
-  PVR_ERROR GetSignalStatus(PVR_SIGNAL_STATUS *signalStatus);
-  bool IsRealTimeStream() const { return m_liveStream ? true : false; }
-  PVR_ERROR GetStreamTimes(PVR_STREAM_TIMES *pStreamTimes);
+  bool OpenLiveStream(const kodi::addon::PVRChannel& channel) override;
+  void CloseLiveStream() override;
+  int ReadLiveStream(unsigned char *pBuffer, unsigned int iBufferSize) override;
+  int64_t SeekLiveStream(int64_t iPosition, int iWhence) override;
+  int64_t LengthLiveStream() override;
+  PVR_ERROR GetSignalStatus(int channelUid, kodi::addon::PVRSignalStatus& signalStatus) override;
+  bool IsRealTimeStream() override { return m_liveStream ? true : false; }
+  PVR_ERROR GetStreamTimes(kodi::addon::PVRStreamTimes& streamTimes) override;
 
   // Recording playback
-  bool OpenRecordedStream(const PVR_RECORDING &recinfo);
-  void CloseRecordedStream();
-  int ReadRecordedStream(unsigned char *pBuffer, unsigned int iBufferSize);
-  long long SeekRecordedStream(long long iPosition, int iWhence);
-  long long LengthRecordedStream();
+  bool OpenRecordedStream(const kodi::addon::PVRRecording& recinfo) override;
+  void CloseRecordedStream() override;
+  int ReadRecordedStream(unsigned char *pBuffer, unsigned int iBufferSize) override;
+  int64_t SeekRecordedStream(int64_t iPosition, int iWhence) override;
+  int64_t LengthRecordedStream() override;
 
   // Menu hook
-  PVR_ERROR CallMenuHook(const PVR_MENUHOOK &menuhook, const PVR_MENUHOOK_DATA &item);
+  PVR_ERROR CallChannelMenuHook(const kodi::addon::PVRMenuhook& menuhook, const kodi::addon::PVRChannel& item) override;
+  PVR_ERROR CallEPGMenuHook(const kodi::addon::PVRMenuhook& menuhook, const kodi::addon::PVREPGTag& tag) override;
+  PVR_ERROR CallRecordingMenuHook(const kodi::addon::PVRMenuhook& menuhook, const kodi::addon::PVRRecording& item) override;
+  PVR_ERROR CallTimerMenuHook(const kodi::addon::PVRMenuhook& menuhook, const kodi::addon::PVRTimer& item) override;
 
   // Backend settings
+  void SetDebug(bool silent = false);
   bool GetLiveTVPriority();
   void SetLiveTVPriority(bool enabled);
   void BlockBackendShutdown();
@@ -150,6 +155,8 @@ private:
   bool m_hang;
   bool m_powerSaving;
   bool m_stopTV;
+
+  unsigned GetBackendAPIVersion();
 
   /// Returns true when streaming recorded or live
   bool IsPlaying() const;
@@ -195,14 +202,19 @@ private:
   int m_recordingsAmount;
   bool m_deletedRecAmountChange;
   int m_deletedRecAmount;
+  int GetRecordingsAmount();
+  PVR_ERROR GetRecordings(kodi::addon::PVRRecordingsResultSet& results);
+  int GetDeletedRecordingsAmount();
+  PVR_ERROR GetDeletedRecordings(kodi::addon::PVRRecordingsResultSet& results);
+  PVR_ERROR DeleteAndForgetRecording(const kodi::addon::PVRRecording& recording);
   void ForceUpdateRecording(ProgramInfoMap::iterator it);
   int FillRecordings();
   MythChannel FindRecordingChannel(const MythProgramInfo& programInfo) const;
   bool IsMyLiveRecording(const MythProgramInfo& programInfo);
 
   // Timers
-  std::map<unsigned int, MYTH_SHARED_PTR<PVR_TIMER> > m_PVRtimerMemorandum;
-  MythTimerEntry PVRtoTimerEntry(const PVR_TIMER &timer, bool checkEPG);
+  std::map<unsigned int, MYTH_SHARED_PTR<kodi::addon::PVRTimer> > m_PVRtimerMemorandum;
+  MythTimerEntry PVRtoTimerEntry(const kodi::addon::PVRTimer &timer, bool checkEPG);
 
   /**
    * \brief Returns full title of MythTV program
@@ -216,10 +228,10 @@ private:
    *
    * \brief Parse and fill AV stream infos for a recorded program
    */
-  static void FillRecordingAVInfo(MythProgramInfo& programInfo, Myth::Stream *stream);
+  void FillRecordingAVInfo(MythProgramInfo& programInfo, Myth::Stream *stream);
 
   /// Get the time that should be reported for this recording
-  static time_t GetRecordingTime(time_t airdate, time_t startDate);
+  time_t GetRecordingTime(time_t airdate, time_t startDate);
 
   /**
    * @FIXME In some circumstances PVR calls GetRecordingLastPlayedPosition() in loop.

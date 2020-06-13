@@ -26,7 +26,7 @@
 #include "MythChannel.h"
 #include "MythPrivate.h"
 
-#include <kodi/xbmc_pvr_types.h>
+#include <kodi/addon-instance/pvr/Timers.h>
 
 #include <vector>
 #include <list>
@@ -250,7 +250,7 @@ private:
 class MythTimerType
 {
 public:
-  typedef std::vector<std::pair<int, std::string> > AttributeList;
+  typedef std::vector<kodi::addon::PVRTypeIntValue> AttributeList;
 
   MythTimerType(TimerTypeId id, unsigned attributes, const std::string& description,
           const AttributeList& priorityList, int priorityDefault,
@@ -258,7 +258,7 @@ public:
           const AttributeList& expirationList, int expirationDefault,
           const AttributeList& recGroupList, int recGroupDefault);
   virtual ~MythTimerType() {}
-  void Fill(PVR_TIMER_TYPE* type) const;
+  void Fill(kodi::addon::PVRTimerType& type) const;
 
 private:
   TimerTypeId m_id;

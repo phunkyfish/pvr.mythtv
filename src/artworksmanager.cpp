@@ -21,34 +21,31 @@
  */
 
 #include "artworksmanager.h"
-#include "client.h"
 
+#include "pvrclient-mythtv.h"
 #include "private/os/os.h"
 
 #define FILEOPS_CHANNEL_DUMMY_ICON    "channel.png"
 #define FILEOPS_RECORDING_DUMMY_ICON  "recording.png"
 #define CHANNEL_ICON_WIDTH            300
 
-using namespace ADDON;
-
 ArtworkManager::ArtworkManager(const std::string& server, unsigned wsapiport, const std::string& wsapiSecurityPin)
 : m_wsapi(NULL)
-, m_localBasePath(g_szUserPath.c_str())
 {
   m_wsapi = new Myth::WSAPI(server, wsapiport, wsapiSecurityPin);
 }
 
 ArtworkManager::~ArtworkManager()
 {
-  SAFE_DELETE(m_wsapi);
+  delete m_wsapi;
 }
 
 std::string ArtworkManager::GetChannelIconPath(const MythChannel& channel)
 {
   if (channel.IsNull() || channel.Icon().empty())
     return "";
-  if (!g_bChannelIcons)
-    return g_szClientPath + PATH_SEPARATOR_STRING + "resources" + PATH_SEPARATOR_STRING + FILEOPS_CHANNEL_DUMMY_ICON;
+  if (!CMythSettings::GetChannelIcons())
+    return kodi::GetAddonPath() + PATH_SEPARATOR_STRING + "resources" + PATH_SEPARATOR_STRING + FILEOPS_CHANNEL_DUMMY_ICON;
 
   return m_wsapi->GetChannelIconUrl(channel.ID(), CHANNEL_ICON_WIDTH);
 }
@@ -57,8 +54,8 @@ std::string ArtworkManager::GetPreviewIconPath(const MythProgramInfo& recording)
 {
   if (recording.IsNull())
     return "";
-  if (!g_bRecordingIcons)
-    return g_szClientPath + PATH_SEPARATOR_STRING + "resources" + PATH_SEPARATOR_STRING + FILEOPS_RECORDING_DUMMY_ICON;
+  if (!CMythSettings::GetRecordingIcons())
+    return kodi::GetAddonPath() + PATH_SEPARATOR_STRING + "resources" + PATH_SEPARATOR_STRING + FILEOPS_RECORDING_DUMMY_ICON;
 
   return m_wsapi->GetPreviewImageUrl(recording.ChannelID(), recording.RecordingStartTime());
 }
@@ -67,11 +64,11 @@ std::string ArtworkManager::GetArtworkPath(const MythProgramInfo& recording, Art
 {
   if (recording.IsNull())
     return "";
-  if (!g_bRecordingIcons)
+  if (!CMythSettings::GetRecordingIcons())
     switch (type)
     {
     case AWTypeCoverart:
-      return g_szClientPath + PATH_SEPARATOR_STRING + "resources" + PATH_SEPARATOR_STRING + FILEOPS_RECORDING_DUMMY_ICON;
+      return kodi::GetAddonPath() + PATH_SEPARATOR_STRING + "resources" + PATH_SEPARATOR_STRING + FILEOPS_RECORDING_DUMMY_ICON;
     default:
       return "";
     }

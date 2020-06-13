@@ -21,6 +21,8 @@
  *
  */
 
+#include <kodi/AddonBase.h>
+
 #include <queue>
 #include <vector>
 
@@ -33,7 +35,7 @@ public:
 
 class TaskHandlerPrivate;
 
-class TaskHandler
+class ATTRIBUTE_HIDDEN TaskHandler
 {
 public:
   TaskHandler();

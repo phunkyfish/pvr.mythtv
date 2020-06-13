@@ -21,13 +21,15 @@
  *
  */
 
+#include <kodi/AddonBase.h>
+
 #include <string>
 #include <map>
 
 typedef std::multimap<int, std::string> CategoryByIdMap;
 typedef std::map<std::string, int> CategoryByNameMap;
 
-class Categories
+class ATTRIBUTE_HIDDEN Categories
 {
 public:
   Categories();

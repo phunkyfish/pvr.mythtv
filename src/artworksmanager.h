@@ -24,11 +24,14 @@
 #include "cppmyth/MythChannel.h"
 #include "cppmyth/MythProgramInfo.h"
 
+#include <kodi/AddonBase.h>
 #include <mythwsapi.h>
 
 #include <string>
 
-class ArtworkManager
+class PVRClientMythTV;
+
+class ATTRIBUTE_HIDDEN ArtworkManager
 {
 public:
   enum ArtworksType
@@ -87,5 +90,4 @@ public:
   std::string GetArtworkPath(const MythProgramInfo& recording, ArtworksType type);
 
   Myth::WSAPI *m_wsapi;
-  std::string m_localBasePath;
 };

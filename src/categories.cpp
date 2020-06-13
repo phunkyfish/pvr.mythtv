@@ -21,21 +21,20 @@
  */
 
 #include "categories.h"
-#include "client.h"
 #include "private/os/os.h"
 
-#define CATEGORIES_FILENAME       "eit_categories.txt"
-#define CATEGORIES_MAXLINESIZE    255
+#include <kodi/Filesystem.h>
+#include <regex>
 
-using namespace ADDON;
+#define CATEGORIES_FILENAME       "eit_categories.txt"
 
 Categories::Categories()
 : m_categoriesById()
 {
   std::string filePath;
-  filePath = g_szClientPath + PATH_SEPARATOR_STRING + "resources" + PATH_SEPARATOR_STRING + CATEGORIES_FILENAME;
+  filePath = kodi::GetAddonPath(std::string("resources") + PATH_SEPARATOR_STRING + CATEGORIES_FILENAME);
   LoadEITCategories(filePath.c_str());
-  filePath = g_szUserPath + CATEGORIES_FILENAME;
+  filePath = kodi::GetBaseUserPath(CATEGORIES_FILENAME);
   LoadEITCategories(filePath.c_str());
   // Copy over
   CategoryByIdMap::const_iterator it;
@@ -63,50 +62,34 @@ int Categories::Category(const std::string& category) const
 
 void Categories::LoadEITCategories(const char *filePath)
 {
-  if (XBMC->FileExists(filePath, false))
+  if (kodi::vfs::FileExists(filePath, false))
   {
-    XBMC->Log(LOG_DEBUG, "%s: Loading EIT categories from file '%s'", __FUNCTION__, filePath);
-    void *file = XBMC->OpenFile(filePath, 0);
-    char *line = new char[CATEGORIES_MAXLINESIZE + 1];
-    char *name = new char[CATEGORIES_MAXLINESIZE + 1];
-    while (XBMC->ReadFileString(file, line, CATEGORIES_MAXLINESIZE))
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Loading EIT categories from file '%s'", __FUNCTION__, filePath);
+
+    kodi::vfs::CFile file;
+    if (!file.OpenFile(filePath, 0))
     {
-      char* end = line + strlen(line);
-      char* pos = strchr(line, ';');
-      if (pos != NULL)
+      kodi::Log(ADDON_LOG_ERROR, "%s: File '%s' failed to open", __FUNCTION__, filePath);
+      return;
+    }
+
+    std::string line;
+    std::regex rgx("^ *(0x.*)*; *\"(.*)\"");
+    while (file.ReadLine(line))
+    {
+      std::smatch matches;
+      if (std::regex_search(line, matches, rgx) && matches.size() == 3)
       {
-        bool encaps = false;
-        int catId;
-        *pos = '\0';
-        if (sscanf(line, "%x", &catId) == 1)
-        {
-          unsigned p = 0;
-          memset(name, 0, CATEGORIES_MAXLINESIZE + 1);
-          do
-          {
-            ++pos;
-          }
-          while (isspace(*pos));
-          if (*pos == '"')
-            encaps = true;
-          while (++pos < end)
-          {
-            if (encaps && *pos == '"' && *(++pos) != '"')
-              break;
-            if (!iscntrl(*pos))
-              name[p++] = *pos;
-          }
-          m_categoriesById.insert(std::pair<int, std::string>(catId, name));
-          XBMC->Log(LOG_DEBUG, "%s: Add name [%s] for category %.2X", __FUNCTION__, name, catId);
-        }
+        int catId = std::stoi(matches[1].str(), nullptr, 16);
+        std::string name = matches[2].str();
+
+        m_categoriesById.insert(std::pair<int, std::string>(catId, name));
+        kodi::Log(ADDON_LOG_DEBUG, "%s: Add name [%s] for category %.2X", __FUNCTION__, name.c_str(), catId);
       }
     }
-    delete[] name;
-    delete[] line;
-    XBMC->CloseFile(file);
   }
   else
   {
-    XBMC->Log(LOG_INFO, "%s: File '%s' not found", __FUNCTION__, filePath);
+    kodi::Log(ADDON_LOG_INFO, "%s: File '%s' not found", __FUNCTION__, filePath);
   }
 }

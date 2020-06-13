@@ -21,21 +21,26 @@
  */
 
 #include "pvrclient-mythtv.h"
-#include "client.h"
 #include "tools.h"
 #include "avinfo.h"
 #include "filestreaming.h"
 #include "taskhandler.h"
 #include "private/os/threads/mutex.h"
 
+#include <kodi/General.h>
+#include <kodi/Network.h>
+#include <kodi/gui/dialogs/Select.h>
+#include <kodi/gui/dialogs/YesNo.h>
+
 #include <time.h>
 #include <set>
 #include <cassert>
 
-using namespace ADDON;
+#define SEEK_POSSIBLE 0x10 ///< flag used to check if protocol allows seeks
 
-PVRClientMythTV::PVRClientMythTV()
-: m_connectionError(CONN_ERROR_NOT_CONNECTED)
+PVRClientMythTV::PVRClientMythTV(KODI_HANDLE instance, const std::string& version)
+: kodi::addon::CInstancePVRClient(instance, version)
+, m_connectionError(CONN_ERROR_NOT_CONNECTED)
 , m_eventHandler(NULL)
 , m_control(NULL)
 , m_liveStream(NULL)
@@ -56,18 +61,30 @@ PVRClientMythTV::PVRClientMythTV()
 , m_deletedRecAmountChange(false)
 , m_deletedRecAmount(0)
 {
+  // Create menu hooks
+  kodi::Log(ADDON_LOG_DEBUG, "Creating menu hooks...");
+
+  kodi::addon::CInstancePVRClient::AddMenuHook(kodi::addon::PVRMenuhook(MENUHOOK_REC_DELETE_AND_RERECORD, 30411, PVR_MENUHOOK_RECORDING));
+  kodi::addon::CInstancePVRClient::AddMenuHook(kodi::addon::PVRMenuhook(MENUHOOK_KEEP_RECORDING, 30412, PVR_MENUHOOK_RECORDING));
+  kodi::addon::CInstancePVRClient::AddMenuHook(kodi::addon::PVRMenuhook(MENUHOOK_INFO_RECORDING, 30425, PVR_MENUHOOK_RECORDING));
+  kodi::addon::CInstancePVRClient::AddMenuHook(kodi::addon::PVRMenuhook(MENUHOOK_TIMER_BACKEND_INFO, 30424, PVR_MENUHOOK_TIMER));
+  kodi::addon::CInstancePVRClient::AddMenuHook(kodi::addon::PVRMenuhook(MENUHOOK_SHOW_HIDE_NOT_RECORDING, 30421, PVR_MENUHOOK_TIMER));
+  kodi::addon::CInstancePVRClient::AddMenuHook(kodi::addon::PVRMenuhook(MENUHOOK_TRIGGER_CHANNEL_UPDATE, 30423, PVR_MENUHOOK_CHANNEL));
+  kodi::addon::CInstancePVRClient::AddMenuHook(kodi::addon::PVRMenuhook(MENUHOOK_INFO_EPG, 30426, PVR_MENUHOOK_EPG));
+
+  kodi::Log(ADDON_LOG_DEBUG, "Creating menu hooks...done");
 }
 
 PVRClientMythTV::~PVRClientMythTV()
 {
-  SAFE_DELETE(m_todo);
-  SAFE_DELETE(m_dummyStream);
-  SAFE_DELETE(m_liveStream);
-  SAFE_DELETE(m_recordingStream);
-  SAFE_DELETE(m_artworksManager);
-  SAFE_DELETE(m_scheduleManager);
-  SAFE_DELETE(m_eventHandler);
-  SAFE_DELETE(m_control);
+  delete m_todo;
+  delete m_dummyStream;
+  delete m_liveStream;
+  delete m_recordingStream;
+  delete m_artworksManager;
+  delete m_scheduleManager;
+  delete m_eventHandler;
+  delete m_control;
   delete m_recordingsLock;
   delete m_channelsLock;
   delete m_lock;
@@ -77,37 +94,37 @@ static void Log(int level, char *msg)
 {
   if (msg && level != MYTH_DBG_NONE)
   {
-    bool doLog = true; //g_bExtraDebug;
-    addon_log_t loglevel = LOG_DEBUG;
+    bool doLog = true; //CMythSettings::GetExtraDebug();
+    AddonLog loglevel = ADDON_LOG_DEBUG;
     switch (level)
     {
     case MYTH_DBG_ERROR:
-      loglevel = LOG_ERROR;
+      loglevel = ADDON_LOG_ERROR;
       doLog = true;
       break;
     case MYTH_DBG_WARN:
-      loglevel = LOG_INFO;
+      loglevel = ADDON_LOG_INFO;
       doLog = true;
       break;
     case MYTH_DBG_INFO:
-      loglevel = LOG_INFO;
+      loglevel = ADDON_LOG_INFO;
       doLog = true;
       break;
     case MYTH_DBG_DEBUG:
     case MYTH_DBG_PROTO:
     case MYTH_DBG_ALL:
-      loglevel = LOG_DEBUG;
+      loglevel = ADDON_LOG_DEBUG;
       break;
     }
-    if (XBMC && doLog)
-      XBMC->Log(loglevel, "%s", msg);
+    if (doLog)
+      kodi::Log(loglevel, "%s", msg);
   }
 }
 
 void PVRClientMythTV::SetDebug(bool silent /*= false*/)
 {
   // Setup libcppmyth logging
-  if (g_bExtraDebug)
+  if (CMythSettings::GetExtraDebug())
     Myth::DBGAll();
   else if (silent)
     Myth::DBGLevel(MYTH_DBG_NONE);
@@ -121,7 +138,7 @@ bool PVRClientMythTV::Connect()
   assert(m_control == NULL);
 
   SetDebug(true);
-  Myth::Control *control = new Myth::Control(g_szMythHostname, g_iProtoPort, g_iWSApiPort, g_szWSSecurityPin, true);
+  Myth::Control *control = new Myth::Control(CMythSettings::GetMythHostname(), CMythSettings::GetProtoPort(), CMythSettings::GetWSApiPort(), CMythSettings::GetWSSecurityPin(), true);
   if (!control->IsOpen())
   {
     switch(control->GetProtoError())
@@ -133,17 +150,17 @@ bool PVRClientMythTV::Connect()
         m_connectionError = CONN_ERROR_SERVER_UNREACHABLE;
     }
     delete control;
-    XBMC->Log(LOG_INFO, "Failed to connect to MythTV backend on %s:%d", g_szMythHostname.c_str(), g_iProtoPort);
+    kodi::Log(ADDON_LOG_INFO, "Failed to connect to MythTV backend on %s:%d", CMythSettings::GetMythHostname().c_str(), CMythSettings::GetProtoPort());
     // Try wake up for the next attempt
-    if (!g_szMythHostEther.empty())
-      XBMC->WakeOnLan(g_szMythHostEther.c_str());
+    if (!CMythSettings::GetMythHostEther().empty())
+      kodi::network::WakeOnLan(CMythSettings::GetMythHostEther().c_str());
     return false;
   }
   if (!control->CheckService())
   {
     m_connectionError = CONN_ERROR_API_UNAVAILABLE;
     delete control;
-    XBMC->Log(LOG_INFO,"Failed to connect to MythTV backend on %s:%d with pin %s", g_szMythHostname.c_str(), g_iWSApiPort, g_szWSSecurityPin.c_str());
+    kodi::Log(ADDON_LOG_INFO,"Failed to connect to MythTV backend on %s:%d with pin %s", CMythSettings::GetMythHostname().c_str(), CMythSettings::GetWSApiPort(), CMythSettings::GetWSSecurityPin().c_str());
     return false;
   }
   m_connectionError = CONN_ERROR_NO_ERROR;
@@ -152,7 +169,7 @@ bool PVRClientMythTV::Connect()
 
   // Create event handler and subscription as needed
   unsigned subid = 0;
-  m_eventHandler = new Myth::EventHandler(g_szMythHostname, g_iProtoPort);
+  m_eventHandler = new Myth::EventHandler(CMythSettings::GetMythHostname(), CMythSettings::GetProtoPort());
   subid = m_eventHandler->CreateSubscription(this);
   m_eventHandler->SubscribeForEvent(subid, Myth::EVENT_HANDLER_STATUS);
   m_eventHandler->SubscribeForEvent(subid, Myth::EVENT_HANDLER_TIMER);
@@ -160,12 +177,12 @@ bool PVRClientMythTV::Connect()
   m_eventHandler->SubscribeForEvent(subid, Myth::EVENT_RECORDING_LIST_CHANGE);
 
   // Create schedule manager and new subscription handled by dedicated thread
-  m_scheduleManager = new MythScheduleManager(g_szMythHostname, g_iProtoPort, g_iWSApiPort, g_szWSSecurityPin);
+  m_scheduleManager = new MythScheduleManager(CMythSettings::GetMythHostname(), CMythSettings::GetProtoPort(), CMythSettings::GetWSApiPort(), CMythSettings::GetWSSecurityPin());
   subid = m_eventHandler->CreateSubscription(this);
   m_eventHandler->SubscribeForEvent(subid, Myth::EVENT_SCHEDULE_CHANGE);
 
   // Create artwork manager
-  m_artworksManager = new ArtworkManager(g_szMythHostname, g_iWSApiPort, g_szWSSecurityPin);
+  m_artworksManager = new ArtworkManager(CMythSettings::GetMythHostname(), CMythSettings::GetWSApiPort(), CMythSettings::GetWSSecurityPin());
 
   // Create the task handler to process various task
   m_todo = new TaskHandler();
@@ -187,88 +204,127 @@ unsigned PVRClientMythTV::GetBackendAPIVersion()
   return 0;
 }
 
-const char *PVRClientMythTV::GetBackendName()
+PVR_ERROR PVRClientMythTV::GetCapabilities(kodi::addon::PVRCapabilities& capabilities)
 {
-  static std::string myName;
-  myName.clear();
-  if (m_control)
-    myName.append("MythTV (").append(m_control->GetServerHostName()).append(")");
-  XBMC->Log(LOG_DEBUG, "%s: %s", __FUNCTION__, myName.c_str());
-  return myName.c_str();
+  unsigned version = GetBackendAPIVersion();
+  capabilities.SetSupportsTV(CMythSettings::GetLiveTV());
+  capabilities.SetSupportsRadio(CMythSettings::GetLiveTV());
+  capabilities.SetSupportsChannelGroups(true);
+  capabilities.SetSupportsChannelScan(false);
+  capabilities.SetSupportsEPG(true);
+  capabilities.SetSupportsTimers(true);
+
+  capabilities.SetHandlesInputStream(true);
+  capabilities.SetHandlesDemuxing(false);
+
+  capabilities.SetSupportsRecordings(true);
+  capabilities.SetSupportsRecordingsUndelete(true);
+  capabilities.SetSupportsRecordingPlayCount((version < 80 ? false : true));
+  capabilities.SetSupportsLastPlayedPosition((version < 88 || !CMythSettings::GetUseBackendBookmarks() ? false : true));
+  capabilities.SetSupportsRecordingEdl(true);
+  capabilities.SetSupportsRecordingsRename(false);
+  capabilities.SetSupportsRecordingsLifetimeChange(false);
+  capabilities.SetSupportsDescrambleInfo(false);
+  capabilities.SetSupportsAsyncEPGTransfer(false);
+  capabilities.SetSupportsRecordingSize(true);
+
+  return PVR_ERROR_NO_ERROR;
 }
 
-const char *PVRClientMythTV::GetBackendVersion()
+PVR_ERROR PVRClientMythTV::GetBackendName(std::string& name)
 {
-  static std::string myVersion;
-  myVersion.clear();
+  if (m_control)
+    name.append("MythTV (").append(m_control->GetServerHostName()).append(")");
+  kodi::Log(ADDON_LOG_DEBUG, "%s: %s", __FUNCTION__, name.c_str());
+  return PVR_ERROR_NO_ERROR;
+}
+
+PVR_ERROR PVRClientMythTV::GetBackendVersion(std::string& version)
+{
   if (m_control)
   {
-    Myth::VersionPtr version = m_control->GetVersion();
-    myVersion = version->version;
+    Myth::VersionPtr myVersion = m_control->GetVersion();
+    version = myVersion->version;
   }
-  XBMC->Log(LOG_DEBUG, "%s: %s", __FUNCTION__, myVersion.c_str());
-  return myVersion.c_str();
+  kodi::Log(ADDON_LOG_DEBUG, "%s: %s", __FUNCTION__, version.c_str());
+  return PVR_ERROR_NO_ERROR;
 }
 
-const char *PVRClientMythTV::GetConnectionString()
+PVR_ERROR PVRClientMythTV::GetBackendHostname(std::string& hostname)
 {
-  static std::string myConnectionString;
-  myConnectionString.clear();
-  myConnectionString.append("http://").append(g_szMythHostname).append(":").append(Myth::IntToString(g_iWSApiPort));
-  XBMC->Log(LOG_DEBUG, "%s: %s", __FUNCTION__, myConnectionString.c_str());
-  return myConnectionString.c_str();
+  hostname = CMythSettings::GetMythHostname();
+  return PVR_ERROR_NOT_IMPLEMENTED;
 }
 
-PVR_ERROR PVRClientMythTV::GetDriveSpace(long long *iTotal, long long *iUsed)
+PVR_ERROR PVRClientMythTV::GetConnectionString(std::string& connection)
+{
+  connection.append("http://").append(CMythSettings::GetMythHostname()).append(":").append(Myth::IntToString(CMythSettings::GetWSApiPort()));
+  kodi::Log(ADDON_LOG_DEBUG, "%s: %s", __FUNCTION__, connection.c_str());
+  return PVR_ERROR_NO_ERROR;
+}
+
+PVR_ERROR PVRClientMythTV::GetDriveSpace(uint64_t& iTotal, uint64_t& iUsed)
 {
   if (!m_control)
     return PVR_ERROR_SERVER_ERROR;
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   int64_t total = 0, used = 0;
   if (m_control->QueryFreeSpaceSummary(&total, &used))
   {
-    *iTotal = (long long)total;
-    *iUsed = (long long)used;
+    iTotal = (uint64_t)total;
+    iUsed = (uint64_t)used;
     return PVR_ERROR_NO_ERROR;
   }
   return PVR_ERROR_UNKNOWN;
 }
 
-void PVRClientMythTV::OnSleep()
+PVR_ERROR PVRClientMythTV::OnSystemSleep()
 {
+  kodi::Log(ADDON_LOG_INFO, "Received event: %s", __FUNCTION__);
+
   if (m_eventHandler)
     m_eventHandler->Stop();
   if (m_scheduleManager)
     m_scheduleManager->CloseControl();
   if (m_control)
     m_control->Close();
+  return PVR_ERROR_NO_ERROR;
 }
 
-void PVRClientMythTV::OnWake()
+PVR_ERROR PVRClientMythTV::OnSystemWake()
 {
+  kodi::Log(ADDON_LOG_INFO, "Received event: %s", __FUNCTION__);
+
   if (m_control)
     m_control->Open();
   if (m_scheduleManager)
     m_scheduleManager->OpenControl();
   if (m_eventHandler)
     m_eventHandler->Start();
+  return PVR_ERROR_NO_ERROR;
 }
 
-void PVRClientMythTV::OnDeactivatedGUI()
+PVR_ERROR PVRClientMythTV::OnPowerSavingActivated()
 {
-  if (g_bAllowMythShutdown && m_control && m_control->IsOpen())
+  kodi::Log(ADDON_LOG_INFO, "Received event: %s", __FUNCTION__);
+
+  if (CMythSettings::GetAllowMythShutdown() && m_control && m_control->IsOpen())
     AllowBackendShutdown();
   m_powerSaving = true;
+  return PVR_ERROR_NO_ERROR;
 }
 
-void PVRClientMythTV::OnActivatedGUI()
+PVR_ERROR PVRClientMythTV::OnPowerSavingDeactivated()
 {
+  kodi::Log(ADDON_LOG_INFO, "Received event: %s", __FUNCTION__);
+
   // block shutdown if backend is connected
-  if (g_bAllowMythShutdown && m_control && m_control->IsOpen())
+  if (CMythSettings::GetAllowMythShutdown() && m_control && m_control->IsOpen())
     BlockBackendShutdown();
   m_powerSaving = false;
+  return PVR_ERROR_NO_ERROR;
 }
 
 void PVRClientMythTV::HandleBackendMessage(Myth::EventMessagePtr msg)
@@ -295,7 +351,7 @@ void PVRClientMythTV::HandleBackendMessage(Myth::EventMessagePtr msg)
           m_control->Close();
         if (m_scheduleManager)
           m_scheduleManager->CloseControl();
-        XBMC->QueueNotification(QUEUE_ERROR, XBMC->GetLocalizedString(30302)); // Connection to MythTV backend lost
+        kodi::QueueNotification(QUEUE_ERROR, "", kodi::GetLocalizedString(30302)); // Connection to MythTV backend lost
       }
       else if (msg->subject[0] == EVENTHANDLER_CONNECTED)
       {
@@ -306,9 +362,9 @@ void PVRClientMythTV::HandleBackendMessage(Myth::EventMessagePtr msg)
           if (m_scheduleManager)
             m_scheduleManager->OpenControl();
           m_hang = false;
-          XBMC->QueueNotification(QUEUE_INFO, XBMC->GetLocalizedString(30303)); // Connection to MythTV restored
+          kodi::QueueNotification(QUEUE_INFO, "", kodi::GetLocalizedString(30303)); // Connection to MythTV restored
           // still in mode power saving I have to allow shutdown again
-          if (m_powerSaving && g_bAllowMythShutdown)
+          if (m_powerSaving && CMythSettings::GetAllowMythShutdown())
             AllowBackendShutdown();
         }
         // Refreshing all
@@ -319,8 +375,8 @@ void PVRClientMythTV::HandleBackendMessage(Myth::EventMessagePtr msg)
       else if (msg->subject[0] == EVENTHANDLER_NOTCONNECTED)
       {
         // Try wake up if GUI is activated
-        if (!m_powerSaving && !g_szMythHostEther.empty())
-          XBMC->WakeOnLan(g_szMythHostEther.c_str());
+        if (!m_powerSaving && !CMythSettings::GetMythHostEther().empty())
+          kodi::network::WakeOnLan(CMythSettings::GetMythHostEther());
       }
       break;
     default:
@@ -331,8 +387,8 @@ void PVRClientMythTV::HandleBackendMessage(Myth::EventMessagePtr msg)
 void PVRClientMythTV::HandleChannelChange()
 {
   FillChannelsAndChannelGroups();
-  PVR->TriggerChannelUpdate();
-  PVR->TriggerChannelGroupsUpdate();
+  kodi::addon::CInstancePVRClient::TriggerChannelUpdate();
+  kodi::addon::CInstancePVRClient::TriggerChannelGroupsUpdate();
 }
 
 void PVRClientMythTV::HandleScheduleChange()
@@ -340,7 +396,7 @@ void PVRClientMythTV::HandleScheduleChange()
   if (!m_scheduleManager)
     return;
   m_scheduleManager->Update();
-  PVR->TriggerTimerUpdate();
+  kodi::addon::CInstancePVRClient::TriggerTimerUpdate();
 }
 
 void PVRClientMythTV::HandleAskRecording(const Myth::EventMessage& msg)
@@ -352,7 +408,7 @@ void PVRClientMythTV::HandleAskRecording(const Myth::EventMessage& msg)
   if (msg.subject.size() < 5)
   {
     for (unsigned i = 0; i < msg.subject.size(); ++i)
-      XBMC->Log(LOG_ERROR, "%s: Incorrect message: %d : %s", __FUNCTION__, i, msg.subject[i].c_str());
+      kodi::Log(ADDON_LOG_ERROR, "%s: Incorrect message: %d : %s", __FUNCTION__, i, msg.subject[i].c_str());
     return;
   }
   // The scheduled recording will hang in MythTV if ASK_RECORDING is just ignored.
@@ -362,25 +418,25 @@ void PVRClientMythTV::HandleAskRecording(const Myth::EventMessage& msg)
   int timeuntil = Myth::StringToInt(msg.subject[2]);
   int hasrec = Myth::StringToInt(msg.subject[3]);
   int haslater = Myth::StringToInt(msg.subject[4]);
-  XBMC->Log(LOG_INFO, "%s: Event ASK_RECORDING: rec=%d timeuntil=%d hasrec=%d haslater=%d", __FUNCTION__,
+  kodi::Log(ADDON_LOG_INFO, "%s: Event ASK_RECORDING: rec=%d timeuntil=%d hasrec=%d haslater=%d", __FUNCTION__,
           cardid, timeuntil, hasrec, haslater);
 
   std::string title;
   if (msg.program)
     title = msg.program->title;
-  XBMC->Log(LOG_INFO, "%s: Event ASK_RECORDING: title=%s", __FUNCTION__, title.c_str());
+  kodi::Log(ADDON_LOG_INFO, "%s: Event ASK_RECORDING: title=%s", __FUNCTION__, title.c_str());
 
   if (timeuntil >= 0 && cardid > 0 && m_liveStream && m_liveStream->GetCardId() == cardid)
   {
-    if (g_iLiveTVConflictStrategy == LIVETV_CONFLICT_STRATEGY_CANCELREC ||
-      (g_iLiveTVConflictStrategy == LIVETV_CONFLICT_STRATEGY_HASLATER && haslater))
+    if (CMythSettings::GetLiveTVConflictStrategy() == LIVETV_CONFLICT_STRATEGY_CANCELREC ||
+      (CMythSettings::GetLiveTVConflictStrategy() == LIVETV_CONFLICT_STRATEGY_HASLATER && haslater))
     {
-      XBMC->QueueNotification(QUEUE_WARNING, XBMC->GetLocalizedString(30307), title.c_str()); // Canceling conflicting recording: %s
+      kodi::QueueFormattedNotification(QUEUE_WARNING, kodi::GetLocalizedString(30307).c_str(), title.c_str()); // Canceling conflicting recording: %s
       m_control->CancelNextRecording((int)cardid, true);
     }
     else // LIVETV_CONFLICT_STRATEGY_STOPTV
     {
-      XBMC->QueueNotification(QUEUE_WARNING, XBMC->GetLocalizedString(30308), title.c_str()); // Stopping Live TV due to conflicting recording: %s
+      kodi::QueueFormattedNotification(QUEUE_WARNING, kodi::GetLocalizedString(30308).c_str(), title.c_str()); // Stopping Live TV due to conflicting recording: %s
       m_stopTV = true; // that will close live stream as soon as possible
     }
   }
@@ -393,8 +449,8 @@ void PVRClientMythTV::HandleRecordingListChange(const Myth::EventMessage& msg)
   unsigned cs = (unsigned)msg.subject.size();
   if (cs <= 1)
   {
-    if (g_bExtraDebug)
-      XBMC->Log(LOG_DEBUG, "%s: Reload all recordings", __FUNCTION__);
+    if (CMythSettings::GetExtraDebug())
+      kodi::Log(ADDON_LOG_DEBUG, "%s: Reload all recordings", __FUNCTION__);
     Myth::OS::CLockGuard lock(*m_recordingsLock);
     FillRecordings();
     ++m_recordingChangePinCount;
@@ -410,15 +466,15 @@ void PVRClientMythTV::HandleRecordingListChange(const Myth::EventMessage& msg)
       ProgramInfoMap::iterator it = m_recordings.find(prog.UID());
       if (it == m_recordings.end())
       {
-        if (g_bExtraDebug)
-          XBMC->Log(LOG_DEBUG, "%s: Add recording: %s", __FUNCTION__, prog.UID().c_str());
+        if (CMythSettings::GetExtraDebug())
+          kodi::Log(ADDON_LOG_DEBUG, "%s: Add recording: %s", __FUNCTION__, prog.UID().c_str());
         // Add recording
         m_recordings.insert(std::pair<std::string, MythProgramInfo>(prog.UID().c_str(), prog));
         ++m_recordingChangePinCount;
       }
     }
     else
-      XBMC->Log(LOG_ERROR, "%s: Add recording failed for %u %ld", __FUNCTION__, (unsigned)chanid, (long)startts);
+      kodi::Log(ADDON_LOG_ERROR, "%s: Add recording failed for %u %ld", __FUNCTION__, (unsigned)chanid, (long)startts);
   }
   else if (cs == 3 && msg.subject[1] == "ADD")
   {
@@ -430,15 +486,15 @@ void PVRClientMythTV::HandleRecordingListChange(const Myth::EventMessage& msg)
       ProgramInfoMap::iterator it = m_recordings.find(prog.UID());
       if (it == m_recordings.end())
       {
-        if (g_bExtraDebug)
-          XBMC->Log(LOG_DEBUG, "%s: Add recording: %s", __FUNCTION__, prog.UID().c_str());
+        if (CMythSettings::GetExtraDebug())
+          kodi::Log(ADDON_LOG_DEBUG, "%s: Add recording: %s", __FUNCTION__, prog.UID().c_str());
         // Add recording
         m_recordings.insert(std::pair<std::string, MythProgramInfo>(prog.UID().c_str(), prog));
         ++m_recordingChangePinCount;
       }
     }
     else
-      XBMC->Log(LOG_ERROR, "%s: Add recording failed for %u", __FUNCTION__, (unsigned)recordedid);
+      kodi::Log(ADDON_LOG_ERROR, "%s: Add recording failed for %u", __FUNCTION__, (unsigned)recordedid);
   }
   else if (cs == 2 && msg.subject[1] == "UPDATE" && msg.program)
   {
@@ -447,10 +503,10 @@ void PVRClientMythTV::HandleRecordingListChange(const Myth::EventMessage& msg)
     ProgramInfoMap::iterator it = m_recordings.find(prog.UID());
     if (it != m_recordings.end())
     {
-      if (g_bExtraDebug)
-        XBMC->Log(LOG_DEBUG, "%s: Update recording: %s", __FUNCTION__, prog.UID().c_str());
-      if (m_control->RefreshRecordedArtwork(*(msg.program)) && g_bExtraDebug)
-        XBMC->Log(LOG_DEBUG, "%s: artwork found for %s", __FUNCTION__, prog.UID().c_str());
+      if (CMythSettings::GetExtraDebug())
+        kodi::Log(ADDON_LOG_DEBUG, "%s: Update recording: %s", __FUNCTION__, prog.UID().c_str());
+      if (m_control->RefreshRecordedArtwork(*(msg.program)) && CMythSettings::GetExtraDebug())
+        kodi::Log(ADDON_LOG_DEBUG, "%s: artwork found for %s", __FUNCTION__, prog.UID().c_str());
       // Reset to recalculate flags
       prog.ResetProps();
       // Keep props
@@ -475,8 +531,8 @@ void PVRClientMythTV::HandleRecordingListChange(const Myth::EventMessage& msg)
       ProgramInfoMap::iterator it = m_recordings.find(prog.UID());
       if (it != m_recordings.end())
       {
-        if (g_bExtraDebug)
-          XBMC->Log(LOG_DEBUG, "%s: Delete recording: %s", __FUNCTION__, prog.UID().c_str());
+        if (CMythSettings::GetExtraDebug())
+          kodi::Log(ADDON_LOG_DEBUG, "%s: Delete recording: %s", __FUNCTION__, prog.UID().c_str());
         // Remove recording
         m_recordings.erase(it);
         ++m_recordingChangePinCount;
@@ -495,8 +551,8 @@ void PVRClientMythTV::HandleRecordingListChange(const Myth::EventMessage& msg)
       ProgramInfoMap::iterator it = m_recordings.find(prog.UID());
       if (it != m_recordings.end())
       {
-        if (g_bExtraDebug)
-          XBMC->Log(LOG_DEBUG, "%s: Delete recording: %s", __FUNCTION__, prog.UID().c_str());
+        if (CMythSettings::GetExtraDebug())
+          kodi::Log(ADDON_LOG_DEBUG, "%s: Delete recording: %s", __FUNCTION__, prog.UID().c_str());
         // Remove recording
         m_recordings.erase(it);
         ++m_recordingChangePinCount;
@@ -510,14 +566,14 @@ void PVRClientMythTV::PromptDeleteRecording(const MythProgramInfo &prog)
   if (IsPlaying() || prog.IsNull())
     return;
   std::string dispTitle = MakeProgramTitle(prog.Title(), prog.Subtitle());
-  if (GUI->Dialog_YesNo_ShowAndGetInput(XBMC->GetLocalizedString(122),
-          XBMC->GetLocalizedString(19112), "", dispTitle.c_str(),
-          "", XBMC->GetLocalizedString(117)))
+  if (kodi::gui::dialogs::YesNo::ShowAndGetInput(kodi::GetLocalizedString(122),
+          kodi::GetLocalizedString(19112), "", dispTitle,
+          "", kodi::GetLocalizedString(117)))
   {
     if (m_control->DeleteRecording(*(prog.GetPtr())))
-      XBMC->Log(LOG_DEBUG, "%s: Deleted recording %s", __FUNCTION__, prog.UID().c_str());
+      kodi::Log(ADDON_LOG_DEBUG, "%s: Deleted recording %s", __FUNCTION__, prog.UID().c_str());
     else
-      XBMC->Log(LOG_ERROR, "%s: Failed to delete recording %s", __FUNCTION__, prog.UID().c_str());
+      kodi::Log(ADDON_LOG_ERROR, "%s: Failed to delete recording %s", __FUNCTION__, prog.UID().c_str());
   }
 }
 
@@ -526,13 +582,13 @@ void PVRClientMythTV::RunHouseKeeping()
   if (!m_control || !m_eventHandler)
     return;
   // It is time to work
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   // Reconnect handler when backend connection has hanging during last period
   if (!m_hang && m_control->HasHanging())
   {
-    XBMC->Log(LOG_INFO, "%s: Ask to refresh handler connection since control connection has hanging", __FUNCTION__);
+    kodi::Log(ADDON_LOG_INFO, "%s: Ask to refresh handler connection since control connection has hanging", __FUNCTION__);
     m_eventHandler->Reset();
     m_control->CleanHanging();
   }
@@ -542,87 +598,91 @@ void PVRClientMythTV::RunHouseKeeping()
     m_recordingsAmountChange = true; // Need count recording amount
     m_deletedRecAmountChange = true; // Need count of deleted amount
     lock.Unlock();
-    PVR->TriggerRecordingUpdate();
+    kodi::addon::CInstancePVRClient::TriggerRecordingUpdate();
     lock.Lock();
     m_recordingChangePinCount = 0;
   }
 }
 
-PVR_ERROR PVRClientMythTV::GetEPGForChannel(ADDON_HANDLE handle, int iChannelUid, time_t iStart, time_t iEnd)
+PVR_ERROR PVRClientMythTV::GetEPGForChannel(int channelUid, time_t start, time_t end, kodi::addon::PVREPGTagsResultSet& results)
 {
   if (!m_control)
     return PVR_ERROR_SERVER_ERROR;
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG,"%s: start: %ld, end: %ld, chanid: %u", __FUNCTION__, (long)iStart, (long)iEnd, iChannelUid);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG,"%s: start: %ld, end: %ld, chanid: %u", __FUNCTION__, (long)start, (long)end, channelUid);
 
 
-  Myth::ProgramMapPtr EPG = m_control->GetProgramGuide(iChannelUid, iStart, iEnd);
+  Myth::ProgramMapPtr EPG = m_control->GetProgramGuide(channelUid, start, end);
   // Transfer EPG for the given channel
   for (Myth::ProgramMap::reverse_iterator it = EPG->rbegin(); it != EPG->rend(); ++it)
   {
-    EPG_TAG tag;
-    memset(&tag, 0, sizeof(EPG_TAG));
-    tag.startTime = it->first;
-    tag.endTime = it->second->endTime;
+    time_t startTime = it->first;
+    time_t endTime = it->second->endTime;
     // Reject bad entry
-    if (tag.endTime <= tag.startTime)
+    if (endTime <= startTime)
       continue;
 
-    // EPG_TAG expects strings as char* and not as copies (like the other PVR types).
-    // Therefore we have to make sure that we don't pass invalid (freed) memory to TransferEpgEntry.
-    // In particular we have to use local variables and must not pass returned string values directly.
-    tag.strTitle = it->second->title.c_str();
-    tag.strPlot = it->second->description.c_str();
-    tag.strGenreDescription = it->second->category.c_str();
-    tag.iUniqueBroadcastId = MythEPGInfo::MakeBroadcastID(it->second->channel.chanId, it->first);
-    tag.iUniqueChannelId = iChannelUid;
-    int genre = m_categories.Category(it->second->category);
-    tag.iGenreSubType = genre & 0x0F;
-    tag.iGenreType = genre & 0xF0;
-    tag.strEpisodeName = it->second->subTitle.c_str();
-    tag.strIconPath = "";
-    tag.strPlotOutline = "";
-    tag.strFirstAired = it->second->airdate.c_str();
-    tag.iEpisodeNumber = (int)it->second->episode;
-    tag.iEpisodePartNumber = EPG_TAG_INVALID_SERIES_EPISODE;
-    tag.iParentalRating = 0;
-    tag.iSeriesNumber = (int)it->second->season;
-    tag.iStarRating = atoi(it->second->stars.c_str());
-    tag.strOriginalTitle = "";
-    tag.strCast = "";
-    tag.strDirector = "";
-    tag.strWriter = "";
-    tag.iYear = 0;
-    tag.strIMDBNumber = it->second->inetref.c_str();
-    if (!it->second->seriesId.empty())
-      tag.iFlags = EPG_TAG_FLAG_IS_SERIES;
-    else
-      tag.iFlags = EPG_TAG_FLAG_UNDEFINED;
+    kodi::addon::PVREPGTag tag;
 
-    PVR->TransferEpgEntry(handle, &tag);
+    tag.SetStartTime(startTime);
+    tag.SetEndTime(endTime);
+    tag.SetTitle(it->second->title);
+    tag.SetPlot(it->second->description);
+    tag.SetGenreDescription(it->second->category);
+    tag.SetUniqueBroadcastId(MythEPGInfo::MakeBroadcastID(it->second->channel.chanId, startTime));
+    tag.SetUniqueChannelId(channelUid);
+    int genre = m_categories.Category(it->second->category);
+    tag.SetGenreSubType(genre & 0x0F);
+    tag.SetGenreType(genre & 0xF0);
+    tag.SetEpisodeName(it->second->subTitle);
+    tag.SetIconPath("");
+    tag.SetPlotOutline("");
+    tag.SetFirstAired(it->second->airdate);
+    // Kodi have -1 to not use, but cppmyth it bring 0
+    if (it->second->episode > 0 || it->second->season > 0)
+    {
+      tag.SetSeriesNumber((int)it->second->season);
+      tag.SetEpisodeNumber((int)it->second->episode);
+    }
+    tag.SetEpisodePartNumber(EPG_TAG_INVALID_SERIES_EPISODE);
+    tag.SetParentalRating(0);
+    tag.SetStarRating(std::stoi(it->second->stars));
+    tag.SetOriginalTitle("");
+    tag.SetCast("");
+    tag.SetDirector("");
+    tag.SetWriter("");
+    tag.SetYear(0);
+    tag.SetIMDBNumber(it->second->inetref);
+    if (!it->second->seriesId.empty())
+      tag.SetFlags(EPG_TAG_FLAG_IS_SERIES);
+    else
+      tag.SetFlags(EPG_TAG_FLAG_UNDEFINED);
+
+    results.Add(tag);
   }
 
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Done", __FUNCTION__);
 
   return PVR_ERROR_NO_ERROR;
 }
 
-int PVRClientMythTV::GetNumChannels()
+PVR_ERROR PVRClientMythTV::GetChannelsAmount(int& amount)
 {
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   Myth::OS::CLockGuard lock(*m_channelsLock);
-  return m_PVRChannels.size();
+  amount = m_PVRChannels.size();
+  return PVR_ERROR_NO_ERROR;
 }
 
-PVR_ERROR PVRClientMythTV::GetChannels(ADDON_HANDLE handle, bool bRadio)
+PVR_ERROR PVRClientMythTV::GetChannels(bool radio, kodi::addon::PVRChannelsResultSet& results)
 {
   if (!m_control)
     return PVR_ERROR_SERVER_ERROR;
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: radio: %s", __FUNCTION__, (bRadio ? "true" : "false"));
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: radio: %s", __FUNCTION__, (radio ? "true" : "false"));
 
   Myth::OS::CLockGuard lock(*m_channelsLock);
 
@@ -632,119 +692,117 @@ PVR_ERROR PVRClientMythTV::GetChannels(ADDON_HANDLE handle, bool bRadio)
   // Transfer channels of the requested type (radio / tv)
   for (PVRChannelList::const_iterator it = m_PVRChannels.begin(); it != m_PVRChannels.end(); ++it)
   {
-    if (it->bIsRadio == bRadio)
+    if (it->bIsRadio == radio)
     {
       ChannelIdMap::const_iterator itm = m_channelsById.find(it->iUniqueId);
       if (itm != m_channelsById.end() && !itm->second.IsNull())
       {
-        PVR_CHANNEL tag;
-        memset(&tag, 0, sizeof(PVR_CHANNEL));
+        kodi::addon::PVRChannel tag;
 
-        tag.iUniqueId = itm->first;
-        tag.iChannelNumber = itm->second.NumberMajor();
-        tag.iSubChannelNumber = itm->second.NumberMinor();
-        PVR_STRCPY(tag.strChannelName, itm->second.Name().c_str());
-        tag.bIsHidden = !itm->second.Visible();
-        tag.bIsRadio = itm->second.IsRadio();
+        tag.SetUniqueId(itm->first);
+        tag.SetChannelNumber(itm->second.NumberMajor());
+        tag.SetSubChannelNumber(itm->second.NumberMinor());
+        tag.SetChannelName(itm->second.Name());
+        tag.SetIsHidden(!itm->second.Visible());
+        tag.SetIsRadio(itm->second.IsRadio());
 
         if (m_artworksManager)
-          PVR_STRCPY(tag.strIconPath, m_artworksManager->GetChannelIconPath(itm->second).c_str());
+          tag.SetIconPath(m_artworksManager->GetChannelIconPath(itm->second));
         else
-          PVR_STRCPY(tag.strIconPath, "");
+          tag.SetIconPath("");
 
         // Unimplemented
-        PVR_STRCPY(tag.strInputFormat, "");
-        tag.iEncryptionSystem = 0;
+        tag.SetMimeType("");
+        tag.SetEncryptionSystem(0);
 
-        PVR->TransferChannelEntry(handle, &tag);
+        results.Add(tag);
       }
     }
   }
 
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Done", __FUNCTION__);
 
   return PVR_ERROR_NO_ERROR;
 }
 
-int PVRClientMythTV::GetChannelGroupsAmount()
+PVR_ERROR PVRClientMythTV::GetChannelGroupsAmount(int& amount)
 {
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   Myth::OS::CLockGuard lock(*m_channelsLock);
-  return m_PVRChannelGroups.size();
+  amount = m_PVRChannelGroups.size();
+  return PVR_ERROR_NO_ERROR;
 }
 
-PVR_ERROR PVRClientMythTV::GetChannelGroups(ADDON_HANDLE handle, bool bRadio)
+PVR_ERROR PVRClientMythTV::GetChannelGroups(bool radio, kodi::addon::PVRChannelGroupsResultSet& results)
 {
   if (!m_control)
     return PVR_ERROR_SERVER_ERROR;
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: radio: %s", __FUNCTION__, (bRadio ? "true" : "false"));
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: radio: %s", __FUNCTION__, (radio ? "true" : "false"));
 
   Myth::OS::CLockGuard lock(*m_channelsLock);
 
   // Transfer channel groups of the given type (radio / tv)
   for (PVRChannelGroupMap::iterator itg = m_PVRChannelGroups.begin(); itg != m_PVRChannelGroups.end(); ++itg)
   {
-    PVR_CHANNEL_GROUP tag;
-    memset(&tag, 0, sizeof(PVR_CHANNEL_GROUP));
+    kodi::addon::PVRChannelGroup tag;
 
-    PVR_STRCPY(tag.strGroupName, itg->first.c_str());
-    tag.bIsRadio = bRadio;
-    tag.iPosition = 0;
+    tag.SetGroupName(itg->first);
+    tag.SetIsRadio(radio);
+    tag.SetPosition(0);
 
     // Only add the group if we have at least one channel of the correct type
     for (PVRChannelList::const_iterator itc = itg->second.begin(); itc != itg->second.end(); ++itc)
     {
-      if (itc->bIsRadio == bRadio)
+      if (itc->bIsRadio == radio)
       {
-        PVR->TransferChannelGroup(handle, &tag);
+        results.Add(tag);
         break;
       }
     }
   }
 
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Done", __FUNCTION__);
 
   return PVR_ERROR_NO_ERROR;
 }
 
-PVR_ERROR PVRClientMythTV::GetChannelGroupMembers(ADDON_HANDLE handle, const PVR_CHANNEL_GROUP &group)
+PVR_ERROR PVRClientMythTV::GetChannelGroupMembers(const kodi::addon::PVRChannelGroup& group, kodi::addon::PVRChannelGroupMembersResultSet& results)
 {
   if (!m_control)
     return PVR_ERROR_SERVER_ERROR;
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: group: %s", __FUNCTION__, group.strGroupName);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: group: %s", __FUNCTION__, group.GetGroupName().c_str());
 
   Myth::OS::CLockGuard lock(*m_channelsLock);
 
-  PVRChannelGroupMap::iterator itg = m_PVRChannelGroups.find(group.strGroupName);
+  PVRChannelGroupMap::iterator itg = m_PVRChannelGroups.find(group.GetGroupName());
   if (itg == m_PVRChannelGroups.end())
   {
-    XBMC->Log(LOG_ERROR,"%s: Channel group not found", __FUNCTION__);
+    kodi::Log(ADDON_LOG_ERROR,"%s: Channel group not found", __FUNCTION__);
     return PVR_ERROR_INVALID_PARAMETERS;
   }
 
   // Transfer the channel group members for the requested group
   for (PVRChannelList::const_iterator itc = itg->second.begin(); itc != itg->second.end(); ++itc)
   {
-    if (itc->bIsRadio == group.bIsRadio)
+    if (itc->bIsRadio == group.GetIsRadio())
     {
-      PVR_CHANNEL_GROUP_MEMBER tag;
-      memset(&tag, 0, sizeof(PVR_CHANNEL_GROUP_MEMBER));
-      tag.iChannelNumber = itc->iChannelNumber;
-      tag.iSubChannelNumber = itc->iSubChannelNumber;
-      tag.iChannelUniqueId = itc->iUniqueId;
-      PVR_STRCPY(tag.strGroupName, group.strGroupName);
-      PVR->TransferChannelGroupMember(handle, &tag);
+      kodi::addon::PVRChannelGroupMember tag;
+      tag.SetChannelNumber(itc->iChannelNumber);
+      tag.SetSubChannelNumber(itc->iSubChannelNumber);
+      tag.SetChannelUniqueId(itc->iUniqueId);
+      tag.SetGroupName(group.GetGroupName());
+      results.Add(tag);
     }
   }
 
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Done", __FUNCTION__);
 
   return PVR_ERROR_NO_ERROR;
 }
@@ -762,7 +820,7 @@ int PVRClientMythTV::FillChannelsAndChannelGroups()
   if (!m_control)
     return 0;
   int count = 0;
-  XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   Myth::OS::CLockGuard lock(*m_channelsLock);
   m_PVRChannels.clear();
@@ -799,8 +857,8 @@ int PVRClientMythTV::FillChannelsAndChannelGroups()
       mapuid_t::iterator itm = channelIdentifiers.find(channelIdentifier);
       if (itm != channelIdentifiers.end())
       {
-        if (g_bExtraDebug)
-          XBMC->Log(LOG_DEBUG, "%s: skipping channel: %d", __FUNCTION__, chanid);
+        if (CMythSettings::GetExtraDebug())
+          kodi::Log(ADDON_LOG_DEBUG, "%s: skipping channel: %d", __FUNCTION__, chanid);
         // Link channel to PVR item
         m_PVRChannelUidById.insert(std::make_pair(chanid, itm->second.iUniqueId));
         // Add found PVR item to the grouping set
@@ -820,7 +878,7 @@ int PVRClientMythTV::FillChannelsAndChannelGroups()
     m_PVRChannelGroups.insert(std::make_pair((*its)->sourceName, PVRChannelList(channelIDs.begin(), channelIDs.end())));
   }
 
-  XBMC->Log(LOG_DEBUG, "%s: Loaded %d channel(s) %d group(s)", __FUNCTION__, count, (unsigned)m_PVRChannelGroups.size());
+  kodi::Log(ADDON_LOG_DEBUG, "%s: Loaded %d channel(s) %d group(s)", __FUNCTION__, count, (unsigned)m_PVRChannelGroups.size());
   return count;
 }
 
@@ -842,10 +900,26 @@ int PVRClientMythTV::FindPVRChannelUid(uint32_t channelId) const
   return PVR_CHANNEL_INVALID_UID;
 }
 
+PVR_ERROR PVRClientMythTV::GetRecordingsAmount(bool deleted, int& amount)
+{
+  if (deleted)
+    amount = GetDeletedRecordingsAmount();
+  else
+    amount = GetRecordingsAmount();
+  return PVR_ERROR_NO_ERROR;
+}
+
+PVR_ERROR PVRClientMythTV::GetRecordings(bool deleted, kodi::addon::PVRRecordingsResultSet& results)
+{
+  if (deleted)
+    return GetDeletedRecordings(results);
+  return GetRecordings(results);
+}
+
 int PVRClientMythTV::GetRecordingsAmount()
 {
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   if (m_recordingsAmountChange)
   {
@@ -853,33 +927,33 @@ int PVRClientMythTV::GetRecordingsAmount()
     Myth::OS::CLockGuard lock(*m_recordingsLock);
     for (ProgramInfoMap::iterator it = m_recordings.begin(); it != m_recordings.end(); ++it)
     {
-      if (!it->second.IsNull() && it->second.IsVisible() && (g_bLiveTVRecordings || !it->second.IsLiveTV()))
+      if (!it->second.IsNull() && it->second.IsVisible() && (CMythSettings::GetLiveTVRecordings() || !it->second.IsLiveTV()))
         res++;
     }
     m_recordingsAmount = res;
     m_recordingsAmountChange = false;
-    XBMC->Log(LOG_DEBUG, "%s: count %d", __FUNCTION__, res);
+    kodi::Log(ADDON_LOG_DEBUG, "%s: count %d", __FUNCTION__, res);
   }
   return m_recordingsAmount;
 }
 
-PVR_ERROR PVRClientMythTV::GetRecordings(ADDON_HANDLE handle)
+PVR_ERROR PVRClientMythTV::GetRecordings(kodi::addon::PVRRecordingsResultSet& results)
 {
   if (!m_control)
     return PVR_ERROR_SERVER_ERROR;
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   Myth::OS::CLockGuard lock(*m_recordingsLock);
 
   // Setup series
-  if (g_iGroupRecordings == GROUP_RECORDINGS_ONLY_FOR_SERIES)
+  if (CMythSettings::GetGroupRecordings() == GROUP_RECORDINGS_ONLY_FOR_SERIES)
   {
     typedef std::map<std::pair<std::string, std::string>, ProgramInfoMap::iterator::pointer> TitlesMap;
     TitlesMap titles;
     for (ProgramInfoMap::iterator it = m_recordings.begin(); it != m_recordings.end(); ++it)
     {
-      if (!it->second.IsNull() && it->second.IsVisible() && (g_bLiveTVRecordings || !it->second.IsLiveTV()))
+      if (!it->second.IsNull() && it->second.IsVisible() && (CMythSettings::GetLiveTVRecordings() || !it->second.IsLiveTV()))
       {
         std::pair<std::string, std::string> title = std::make_pair(it->second.RecordingGroup(), it->second.GroupingTitle());
         TitlesMap::iterator found = titles.find(title);
@@ -901,63 +975,63 @@ PVR_ERROR PVRClientMythTV::GetRecordings(ADDON_HANDLE handle)
   // Transfer to PVR
   for (ProgramInfoMap::iterator it = m_recordings.begin(); it != m_recordings.end(); ++it)
   {
-    if (!it->second.IsNull() && it->second.IsVisible() && (g_bLiveTVRecordings || !it->second.IsLiveTV()))
+    if (!it->second.IsNull() && it->second.IsVisible() && (CMythSettings::GetLiveTVRecordings() || !it->second.IsLiveTV()))
     {
-      PVR_RECORDING tag;
-      memset(&tag, 0, sizeof(PVR_RECORDING));
-      tag.bIsDeleted = false;
+      kodi::addon::PVRRecording tag;
+
+      tag.SetIsDeleted(false);
       time_t airTime = Myth::StringToTime(it->second.Airdate());
 
-      tag.recordingTime = GetRecordingTime(airTime, it->second.RecordingStartTime());
-      tag.iDuration = it->second.Duration();
-      tag.iPlayCount = it->second.IsWatched() ? 1 : 0;
-      tag.iLastPlayedPosition = it->second.HasBookmark() ? 1 : 0;
+      tag.SetRecordingTime(GetRecordingTime(airTime, it->second.RecordingStartTime()));
+      tag.SetDuration(it->second.Duration());
+      tag.SetPlayCount(it->second.IsWatched() ? 1 : 0);
+      tag.SetLastPlayedPosition(it->second.HasBookmark() ? 1 : 0);
 
       std::string id = it->second.UID();
 
       std::string str; // a temporary string to build formating label
       std::string title(it->second.Title());
-      if (it->second.IsDamaged() && !g_szDamagedColor.empty())
+      if (it->second.IsDamaged() && !CMythSettings::GetDamagedColor().empty())
       {
         str.assign(title);
-        title.assign("[COLOR ").append(g_szDamagedColor).append("]").append(str).append("[/COLOR]");
+        title.assign("[COLOR ").append(CMythSettings::GetDamagedColor()).append("]").append(str).append("[/COLOR]");
       }
 
-      PVR_STRCPY(tag.strRecordingId, id.c_str());
-      PVR_STRCPY(tag.strTitle, title.c_str());
-      PVR_STRCPY(tag.strEpisodeName, it->second.Subtitle().c_str());
+      tag.SetRecordingId(id);
+      tag.SetTitle(title);
+      tag.SetEpisodeName(it->second.Subtitle());
       if (it->second.Season() == 0 && it->second.Episode() == 0)
       {
-        tag.iSeriesNumber = PVR_RECORDING_INVALID_SERIES_EPISODE;
-        tag.iEpisodeNumber = PVR_RECORDING_INVALID_SERIES_EPISODE;
+        tag.SetSeriesNumber(PVR_RECORDING_INVALID_SERIES_EPISODE);
+        tag.SetEpisodeNumber(PVR_RECORDING_INVALID_SERIES_EPISODE);
       }
       else
       {
-        tag.iSeriesNumber = it->second.Season();
-        tag.iEpisodeNumber = it->second.Episode();
+        tag.SetSeriesNumber(it->second.Season());
+        tag.SetEpisodeNumber(it->second.Episode());
       }
       if (difftime(airTime, 0) > 0)
       {
         struct tm airTimeDate;
         localtime_r(&airTime, &airTimeDate);
-        tag.iYear = airTimeDate.tm_year + 1900;
+        tag.SetYear(airTimeDate.tm_year + 1900);
       }
-      PVR_STRCPY(tag.strPlot, it->second.Description().c_str());
-      PVR_STRCPY(tag.strChannelName, it->second.ChannelName().c_str());
-      tag.iChannelUid = FindPVRChannelUid(it->second.ChannelID());
-      tag.channelType = PVR_RECORDING_CHANNEL_TYPE_TV;
+      tag.SetPlot(it->second.Description());
+      tag.SetChannelName(it->second.ChannelName());
+      tag.SetChannelUid(FindPVRChannelUid(it->second.ChannelID()));
+      tag.SetChannelType(PVR_RECORDING_CHANNEL_TYPE_TV);
 
       int genre = m_categories.Category(it->second.Category());
-      tag.iGenreSubType = genre&0x0F;
-      tag.iGenreType = genre&0xF0;
+      tag.SetGenreSubType(genre&0x0F);
+      tag.SetGenreType(genre&0xF0);
 
       // Add recording title to directory to group everything according to its name just like MythTV does
       std::string strDirectory;
-      if (!g_bRootDefaultGroup || it->second.RecordingGroup().compare("Default") != 0)
+      if (!CMythSettings::GetRootDefaultGroup() || it->second.RecordingGroup().compare("Default") != 0)
         strDirectory.append(it->second.RecordingGroup());
-      if (g_iGroupRecordings == GROUP_RECORDINGS_ALWAYS || (g_iGroupRecordings == GROUP_RECORDINGS_ONLY_FOR_SERIES && it->second.GetPropsSerie()))
+      if (CMythSettings::GetGroupRecordings() == GROUP_RECORDINGS_ALWAYS || (CMythSettings::GetGroupRecordings() == GROUP_RECORDINGS_ONLY_FOR_SERIES && it->second.GetPropsSerie()))
         strDirectory.append("/").append(it->second.GroupingTitle());
-      PVR_STRCPY(tag.strDirectory, strDirectory.c_str());
+      tag.SetDirectory(strDirectory);
 
       // Images
       std::string strIconPath;
@@ -982,37 +1056,38 @@ PVR_ERROR PVRClientMythTV::GetRecordings(ADDON_HANDLE handle)
           strFanartPath = m_artworksManager->GetArtworkPath(it->second, ArtworkManager::AWTypeFanart);
       }
 
-      PVR_STRCPY(tag.strIconPath, strIconPath.c_str());
-      PVR_STRCPY(tag.strThumbnailPath, strThumbnailPath.c_str());
-      PVR_STRCPY(tag.strFanartPath, strFanartPath.c_str());
+      tag.SetIconPath(strIconPath);
+      tag.SetThumbnailPath(strThumbnailPath);
+      tag.SetFanartPath(strFanartPath);
 
       // EPG Entry (Enables "Play recording" option and icon)
       if (!it->second.IsLiveTV() && difftime(now, it->second.EndTime()) < INTERVAL_DAY) // Up to 1 day in the past
-        tag.iEpgEventId = MythEPGInfo::MakeBroadcastID(FindPVRChannelUid(it->second.ChannelID()), it->second.StartTime());
+        tag.SetEPGEventId(MythEPGInfo::MakeBroadcastID(FindPVRChannelUid(it->second.ChannelID()), it->second.StartTime()));
 
       // Unimplemented
-      tag.iLifetime = 0;
-      tag.iPriority = 0;
-      PVR_STRCPY(tag.strPlotOutline, "");
-      tag.sizeInBytes = it->second.FileSize();
-      tag.iFlags = PVR_RECORDING_FLAG_UNDEFINED;
+      tag.SetLifetime(0);
+      tag.SetPriority(0);
+      tag.SetPlotOutline("");
+      tag.SetSizeInBytes(it->second.FileSize());
+      unsigned int flags = PVR_RECORDING_FLAG_UNDEFINED;
       if (!it->second.GetPropsSerie())
-        tag.iFlags |= PVR_RECORDING_FLAG_IS_SERIES;
+        flags |= PVR_RECORDING_FLAG_IS_SERIES;
+      tag.SetFlags(flags);
 
-      PVR->TransferRecordingEntry(handle, &tag);
+      results.Add(tag);
     }
   }
 
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Done", __FUNCTION__);
 
   return PVR_ERROR_NO_ERROR;
 }
 
 int PVRClientMythTV::GetDeletedRecordingsAmount()
 {
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   if (m_deletedRecAmountChange)
   {
@@ -1020,72 +1095,72 @@ int PVRClientMythTV::GetDeletedRecordingsAmount()
     Myth::OS::CLockGuard lock(*m_recordingsLock);
     for (ProgramInfoMap::iterator it = m_recordings.begin(); it != m_recordings.end(); ++it)
     {
-      if (!it->second.IsNull() && it->second.IsDeleted() && (g_bLiveTVRecordings || !it->second.IsLiveTV()))
+      if (!it->second.IsNull() && it->second.IsDeleted() && (CMythSettings::GetLiveTVRecordings() || !it->second.IsLiveTV()))
         res++;
     }
     m_deletedRecAmount = res;
     m_deletedRecAmountChange = false;
-    XBMC->Log(LOG_DEBUG, "%s: count %d", __FUNCTION__, res);
+    kodi::Log(ADDON_LOG_DEBUG, "%s: count %d", __FUNCTION__, res);
   }
   return m_deletedRecAmount;
 }
 
-PVR_ERROR PVRClientMythTV::GetDeletedRecordings(ADDON_HANDLE handle)
+PVR_ERROR PVRClientMythTV::GetDeletedRecordings(kodi::addon::PVRRecordingsResultSet& results)
 {
   if (!m_control)
     return PVR_ERROR_SERVER_ERROR;
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   Myth::OS::CLockGuard lock(*m_recordingsLock);
 
   // Transfer to PVR
   for (ProgramInfoMap::iterator it = m_recordings.begin(); it != m_recordings.end(); ++it)
   {
-    if (!it->second.IsNull() && it->second.IsDeleted() && (g_bLiveTVRecordings || !it->second.IsLiveTV()))
+    if (!it->second.IsNull() && it->second.IsDeleted() && (CMythSettings::GetLiveTVRecordings() || !it->second.IsLiveTV()))
     {
-      PVR_RECORDING tag;
-      memset(&tag, 0, sizeof(PVR_RECORDING));
-      tag.bIsDeleted = true;
+      kodi::addon::PVRRecording tag;
+
+      tag.SetIsDeleted(true);
       time_t airTime = Myth::StringToTime(it->second.Airdate());
 
-      tag.recordingTime = GetRecordingTime(airTime, it->second.RecordingStartTime());
-      tag.iDuration = it->second.Duration();
-      tag.iPlayCount = it->second.IsWatched() ? 1 : 0;
-      tag.iLastPlayedPosition = it->second.HasBookmark() ? 1 : 0;
+      tag.SetRecordingTime(GetRecordingTime(airTime, it->second.RecordingStartTime()));
+      tag.SetDuration(it->second.Duration());
+      tag.SetPlayCount(it->second.IsWatched() ? 1 : 0);
+      tag.SetLastPlayedPosition(it->second.HasBookmark() ? 1 : 0);
 
       std::string id = it->second.UID();
 
-      PVR_STRCPY(tag.strRecordingId, id.c_str());
-      PVR_STRCPY(tag.strTitle, it->second.Title().c_str());
-      PVR_STRCPY(tag.strEpisodeName, it->second.Subtitle().c_str());
+      tag.SetRecordingId(id);
+      tag.SetTitle(it->second.Title());
+      tag.SetEpisodeName(it->second.Subtitle());
       if (it->second.Season() == 0 && it->second.Episode() == 0)
       {
-        tag.iSeriesNumber = PVR_RECORDING_INVALID_SERIES_EPISODE;
-        tag.iEpisodeNumber = PVR_RECORDING_INVALID_SERIES_EPISODE;
+        tag.SetSeriesNumber(PVR_RECORDING_INVALID_SERIES_EPISODE);
+        tag.SetEpisodeNumber(PVR_RECORDING_INVALID_SERIES_EPISODE);
       }
       else
       {
-        tag.iSeriesNumber = it->second.Season();
-        tag.iEpisodeNumber = it->second.Episode();
+        tag.SetSeriesNumber(it->second.Season());
+        tag.SetEpisodeNumber(it->second.Episode());
       }
       if (difftime(airTime, 0) > 0)
       {
         struct tm airTimeDate;
         localtime_r(&airTime, &airTimeDate);
-        tag.iYear = airTimeDate.tm_year + 1900;
+        tag.SetYear(airTimeDate.tm_year + 1900);
       }
-      PVR_STRCPY(tag.strPlot, it->second.Description().c_str());
-      PVR_STRCPY(tag.strChannelName, it->second.ChannelName().c_str());
-      tag.iChannelUid = FindPVRChannelUid(it->second.ChannelID());
-      tag.channelType = PVR_RECORDING_CHANNEL_TYPE_TV;
+      tag.SetPlot(it->second.Description());
+      tag.SetChannelName(it->second.ChannelName());
+      tag.SetChannelUid(FindPVRChannelUid(it->second.ChannelID()));
+      tag.SetChannelType(PVR_RECORDING_CHANNEL_TYPE_TV);
 
       int genre = m_categories.Category(it->second.Category());
-      tag.iGenreSubType = genre&0x0F;
-      tag.iGenreType = genre&0xF0;
+      tag.SetGenreSubType(genre&0x0F);
+      tag.SetGenreType(genre&0xF0);
 
       // Default to root of deleted view
-      PVR_STRCPY(tag.strDirectory, "");
+      tag.SetDirectory("");
 
       // Images
       std::string strIconPath;
@@ -1109,23 +1184,23 @@ PVR_ERROR PVRClientMythTV::GetDeletedRecordings(ADDON_HANDLE handle)
         if (it->second.HasFanart())
           strFanartPath = m_artworksManager->GetArtworkPath(it->second, ArtworkManager::AWTypeFanart);
       }
-      PVR_STRCPY(tag.strIconPath, strIconPath.c_str());
-      PVR_STRCPY(tag.strThumbnailPath, strThumbnailPath.c_str());
-      PVR_STRCPY(tag.strFanartPath, strFanartPath.c_str());
+      tag.SetIconPath(strIconPath);
+      tag.SetThumbnailPath(strThumbnailPath);
+      tag.SetFanartPath(strFanartPath);
 
       // Unimplemented
-      tag.iLifetime = 0;
-      tag.iPriority = 0;
-      PVR_STRCPY(tag.strPlotOutline, "");
-      tag.sizeInBytes = it->second.FileSize();
-      tag.iFlags = PVR_RECORDING_FLAG_UNDEFINED;
+      tag.SetLifetime(0);
+      tag.SetPriority(0);
+      tag.SetPlotOutline("");
+      tag.SetSizeInBytes(it->second.FileSize());
+      tag.SetFlags(PVR_RECORDING_FLAG_UNDEFINED);
 
-      PVR->TransferRecordingEntry(handle, &tag);
+      results.Add(tag);
     }
   }
 
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Done", __FUNCTION__);
 
   return PVR_ERROR_NO_ERROR;
 }
@@ -1134,8 +1209,8 @@ void PVRClientMythTV::ForceUpdateRecording(ProgramInfoMap::iterator it)
 {
   if (!m_control)
     return;
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   if (!it->second.IsNull())
   {
@@ -1148,8 +1223,8 @@ void PVRClientMythTV::ForceUpdateRecording(ProgramInfoMap::iterator it)
       it->second = prog;
       ++m_recordingChangePinCount;
 
-      if (g_bExtraDebug)
-        XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
+      if (CMythSettings::GetExtraDebug())
+        kodi::Log(ADDON_LOG_DEBUG, "%s: Done", __FUNCTION__);
     }
   }
 }
@@ -1159,7 +1234,7 @@ int PVRClientMythTV::FillRecordings()
   int count = 0;
   if (!m_control || !m_eventHandler)
     return count;
-  XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   // Check event connection
   if (!m_eventHandler->IsConnected())
@@ -1178,19 +1253,19 @@ int PVRClientMythTV::FillRecordings()
   }
   if (count > 0)
     m_recordingsAmountChange = m_deletedRecAmountChange = true; // Need count amounts
-  XBMC->Log(LOG_DEBUG, "%s: count %d", __FUNCTION__, count);
+  kodi::Log(ADDON_LOG_DEBUG, "%s: count %d", __FUNCTION__, count);
   return count;
 }
 
-PVR_ERROR PVRClientMythTV::DeleteRecording(const PVR_RECORDING &recording)
+PVR_ERROR PVRClientMythTV::DeleteRecording(const kodi::addon::PVRRecording& recording)
 {
   if (!m_control)
     return PVR_ERROR_SERVER_ERROR;
-  XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   Myth::OS::CLockGuard lock(*m_recordingsLock);
 
-  ProgramInfoMap::iterator it = m_recordings.find(recording.strRecordingId);
+  ProgramInfoMap::iterator it = m_recordings.find(recording.GetRecordingId());
   if (it != m_recordings.end())
   {
     // Deleting Live recording is prohibited. Otherwise continue
@@ -1207,30 +1282,30 @@ PVR_ERROR PVRClientMythTV::DeleteRecording(const PVR_RECORDING &recording)
     bool ret = m_control->DeleteRecording(*(it->second.GetPtr()));
     if (ret)
     {
-      XBMC->Log(LOG_DEBUG, "%s: Deleted recording %s", __FUNCTION__, recording.strRecordingId);
+      kodi::Log(ADDON_LOG_DEBUG, "%s: Deleted recording %s", __FUNCTION__, recording.GetRecordingId().c_str());
       return PVR_ERROR_NO_ERROR;
     }
     else
     {
-      XBMC->Log(LOG_ERROR, "%s: Failed to delete recording %s", __FUNCTION__, recording.strRecordingId);
+      kodi::Log(ADDON_LOG_ERROR, "%s: Failed to delete recording %s", __FUNCTION__, recording.GetRecordingId().c_str());
     }
   }
   else
   {
-    XBMC->Log(LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.strRecordingId);
+    kodi::Log(ADDON_LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.GetRecordingId().c_str());
   }
   return PVR_ERROR_FAILED;
 }
 
-PVR_ERROR PVRClientMythTV::DeleteAndForgetRecording(const PVR_RECORDING &recording)
+PVR_ERROR PVRClientMythTV::DeleteAndForgetRecording(const kodi::addon::PVRRecording& recording)
 {
   if (!m_control)
     return PVR_ERROR_SERVER_ERROR;
-  XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   Myth::OS::CLockGuard lock(*m_recordingsLock);
 
-  ProgramInfoMap::iterator it = m_recordings.find(recording.strRecordingId);
+  ProgramInfoMap::iterator it = m_recordings.find(recording.GetRecordingId());
   if (it != m_recordings.end())
   {
     // Deleting Live recording is prohibited. Otherwise continue
@@ -1247,22 +1322,22 @@ PVR_ERROR PVRClientMythTV::DeleteAndForgetRecording(const PVR_RECORDING &recordi
     bool ret = m_control->DeleteRecording(*(it->second.GetPtr()), false, true);
     if (ret)
     {
-      XBMC->Log(LOG_DEBUG, "%s: Deleted and forget recording %s", __FUNCTION__, recording.strRecordingId);
+      kodi::Log(ADDON_LOG_DEBUG, "%s: Deleted and forget recording %s", __FUNCTION__, recording.GetRecordingId().c_str());
       return PVR_ERROR_NO_ERROR;
     }
     else
     {
-      XBMC->Log(LOG_ERROR, "%s: Failed to delete recording %s", __FUNCTION__, recording.strRecordingId);
+      kodi::Log(ADDON_LOG_ERROR, "%s: Failed to delete recording %s", __FUNCTION__, recording.GetRecordingId().c_str());
     }
   }
   else
   {
-    XBMC->Log(LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.strRecordingId);
+    kodi::Log(ADDON_LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.GetRecordingId().c_str());
   }
   return PVR_ERROR_FAILED;
 }
 
-class PromptDeleteRecordingTask : public Task
+class ATTRIBUTE_HIDDEN PromptDeleteRecordingTask : public Task
 {
 public:
   PromptDeleteRecordingTask(PVRClientMythTV* pvr, const MythProgramInfo& prog)
@@ -1279,27 +1354,27 @@ public:
   MythProgramInfo m_prog;
 };
 
-PVR_ERROR PVRClientMythTV::SetRecordingPlayCount(const PVR_RECORDING &recording, int count)
+PVR_ERROR PVRClientMythTV::SetRecordingPlayCount(const kodi::addon::PVRRecording& recording, int count)
 {
   if (!m_control)
     return PVR_ERROR_SERVER_ERROR;
-  XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   Myth::OS::CLockGuard lock(*m_recordingsLock);
-  ProgramInfoMap::iterator it = m_recordings.find(recording.strRecordingId);
+  ProgramInfoMap::iterator it = m_recordings.find(recording.GetRecordingId());
   if (it != m_recordings.end())
   {
     if (m_control->UpdateRecordedWatchedStatus(*(it->second.GetPtr()), (count > 0 ? true : false)))
     {
-      if (g_bExtraDebug)
-        XBMC->Log(LOG_DEBUG, "%s: Set watched state for %s", __FUNCTION__, recording.strRecordingId);
+      if (CMythSettings::GetExtraDebug())
+        kodi::Log(ADDON_LOG_DEBUG, "%s: Set watched state for %s", __FUNCTION__, recording.GetRecordingId().c_str());
       ForceUpdateRecording(it);
     }
     else
     {
-      XBMC->Log(LOG_DEBUG, "%s: Failed setting watched state for: %s", __FUNCTION__, recording.strRecordingId);
+      kodi::Log(ADDON_LOG_DEBUG, "%s: Failed setting watched state for: %s", __FUNCTION__, recording.GetRecordingId().c_str());
     }
-    if (g_bPromptDeleteAtEnd)
+    if (CMythSettings::GetPromptDeleteAtEnd())
     {
       m_todo->ScheduleTask(new PromptDeleteRecordingTask(this, it->second), 1000);
     }
@@ -1307,20 +1382,20 @@ PVR_ERROR PVRClientMythTV::SetRecordingPlayCount(const PVR_RECORDING &recording,
   }
   else
   {
-    XBMC->Log(LOG_DEBUG, "%s: Recording %s does not exist", __FUNCTION__, recording.strRecordingId);
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Recording %s does not exist", __FUNCTION__, recording.GetRecordingId().c_str());
     return PVR_ERROR_FAILED;
   }
 }
 
 PVRClientMythTV::cachedBookmark_t PVRClientMythTV::_cachedBookmark = { 0, 0, 0 };
 
-PVR_ERROR PVRClientMythTV::SetRecordingLastPlayedPosition(const PVR_RECORDING &recording, int lastplayedposition)
+PVR_ERROR PVRClientMythTV::SetRecordingLastPlayedPosition(const kodi::addon::PVRRecording& recording, int lastplayedposition)
 {
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: Setting Bookmark for: %s to %d", __FUNCTION__, recording.strTitle, lastplayedposition);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Setting Bookmark for: %s to %d", __FUNCTION__, recording.GetTitle().c_str(), lastplayedposition);
 
   Myth::OS::CLockGuard lock(*m_recordingsLock);
-  ProgramInfoMap::iterator it = m_recordings.find(recording.strRecordingId);
+  ProgramInfoMap::iterator it = m_recordings.find(recording.GetRecordingId());
   if (it != m_recordings.end())
   {
     Myth::ProgramPtr prog(it->second.GetPtr());
@@ -1331,32 +1406,33 @@ PVR_ERROR PVRClientMythTV::SetRecordingLastPlayedPosition(const PVR_RECORDING &r
       // Write the bookmark
       if (m_control->SetSavedBookmark(*prog, 2, duration))
       {
-        _cachedBookmark = { recording.iChannelUid, recording.recordingTime, lastplayedposition };
-        if (g_bExtraDebug)
-          XBMC->Log(LOG_DEBUG, "%s: Setting Bookmark successful", __FUNCTION__);
+        _cachedBookmark = { recording.GetChannelUid(), recording.GetRecordingTime(), lastplayedposition };
+        if (CMythSettings::GetExtraDebug())
+          kodi::Log(ADDON_LOG_DEBUG, "%s: Setting Bookmark successful", __FUNCTION__);
         return PVR_ERROR_NO_ERROR;
       }
     }
-    XBMC->Log(LOG_INFO, "%s: Setting Bookmark failed", __FUNCTION__);
+    kodi::Log(ADDON_LOG_INFO, "%s: Setting Bookmark failed", __FUNCTION__);
     return PVR_ERROR_NO_ERROR;
   }
-  XBMC->Log(LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.strRecordingId);
+  kodi::Log(ADDON_LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.GetRecordingId().c_str());
   return PVR_ERROR_FAILED;
 }
 
-int PVRClientMythTV::GetRecordingLastPlayedPosition(const PVR_RECORDING &recording)
+PVR_ERROR PVRClientMythTV::GetRecordingLastPlayedPosition(const kodi::addon::PVRRecording& recording, int& position)
 {
-  if (recording.iChannelUid == _cachedBookmark.channelUid && recording.recordingTime == _cachedBookmark.recordingTime)
+  if (recording.GetChannelUid() == _cachedBookmark.channelUid && recording.GetRecordingTime() == _cachedBookmark.recordingTime)
   {
-    XBMC->Log(LOG_DEBUG, "%s: Returning cached Bookmark for: %s", __FUNCTION__, recording.strTitle);
-    return _cachedBookmark.position;
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Returning cached Bookmark for: %s", __FUNCTION__, recording.GetTitle().c_str());
+    position = _cachedBookmark.position;
+    return PVR_ERROR_NO_ERROR;
   }
 
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: Reading Bookmark for: %s", __FUNCTION__, recording.strTitle);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Reading Bookmark for: %s", __FUNCTION__, recording.GetTitle().c_str());
 
   Myth::OS::CLockGuard lock(*m_recordingsLock);
-  ProgramInfoMap::iterator it = m_recordings.find(recording.strRecordingId);
+  ProgramInfoMap::iterator it = m_recordings.find(recording.GetRecordingId());
   if (it != m_recordings.end())
   {
     if (it->second.HasBookmark())
@@ -1368,40 +1444,39 @@ int PVRClientMythTV::GetRecordingLastPlayedPosition(const PVR_RECORDING &recordi
         int64_t duration = m_control->GetSavedBookmark(*prog, 2); // returns 0 if no bookmark was found
         if (duration > 0)
         {
-          int position = (int)(duration / 1000);
-          _cachedBookmark = { recording.iChannelUid, recording.recordingTime, position };
-          if (g_bExtraDebug)
-            XBMC->Log(LOG_DEBUG, "%s: %d", __FUNCTION__, position);
-          return position;
+          position = (int)(duration / 1000);
+          _cachedBookmark = { recording.GetChannelUid(), recording.GetRecordingTime(), position };
+          if (CMythSettings::GetExtraDebug())
+            kodi::Log(ADDON_LOG_DEBUG, "%s: %d", __FUNCTION__, position);
+          return PVR_ERROR_NO_ERROR;
         }
       }
     }
-    if (g_bExtraDebug)
-      XBMC->Log(LOG_DEBUG, "%s: Recording %s has no bookmark", __FUNCTION__, recording.strTitle);
+    if (CMythSettings::GetExtraDebug())
+      kodi::Log(ADDON_LOG_DEBUG, "%s: Recording %s has no bookmark", __FUNCTION__, recording.GetTitle().c_str());
   }
   else
-    XBMC->Log(LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.strRecordingId);
-  _cachedBookmark = { recording.iChannelUid, recording.recordingTime, 0 };
-  return 0;
+    kodi::Log(ADDON_LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.GetRecordingId().c_str());
+  _cachedBookmark = { recording.GetChannelUid(), recording.GetRecordingTime(), 0 };
+  return PVR_ERROR_INVALID_PARAMETERS;
 }
 
-PVR_ERROR PVRClientMythTV::GetRecordingEdl(const PVR_RECORDING &recording, PVR_EDL_ENTRY entries[], int *size)
+PVR_ERROR PVRClientMythTV::GetRecordingEdl(const kodi::addon::PVRRecording& recording, std::vector<kodi::addon::PVREDLEntry>& edl)
 {
   if (!m_control)
     return PVR_ERROR_SERVER_ERROR;
-  *size = 0;
-  if (g_iEnableEDL == ENABLE_EDL_NEVER)
+  if (CMythSettings::GetEnableEDL() == ENABLE_EDL_NEVER)
     return PVR_ERROR_NO_ERROR;
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: Reading edl for: %s", __FUNCTION__, recording.strTitle);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Reading edl for: %s", __FUNCTION__, recording.GetTitle().c_str());
   // Check recording
   MythProgramInfo prog;
   {
     Myth::OS::CLockGuard lock(*m_recordingsLock);
-    ProgramInfoMap::iterator it = m_recordings.find(recording.strRecordingId);
+    ProgramInfoMap::iterator it = m_recordings.find(recording.GetRecordingId());
     if (it == m_recordings.end())
     {
-      XBMC->Log(LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.strRecordingId);
+      kodi::Log(ADDON_LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.GetRecordingId().c_str());
       return PVR_ERROR_INVALID_PARAMETERS;
     }
     prog = it->second;
@@ -1415,7 +1490,7 @@ PVR_ERROR PVRClientMythTV::GetRecordingEdl(const PVR_RECORDING &recording, PVR_E
     unit = 0; // marks are based on framecount
     // Check required props else return
     rate = prog.GetPropsVideoFrameRate();
-    XBMC->Log(LOG_DEBUG, "%s: AV props: Frame Rate = %.3f", __FUNCTION__, rate);
+    kodi::Log(ADDON_LOG_DEBUG, "%s: AV props: Frame Rate = %.3f", __FUNCTION__, rate);
     if (rate <= 0)
       return PVR_ERROR_NO_ERROR;
   }
@@ -1424,7 +1499,7 @@ PVR_ERROR PVRClientMythTV::GetRecordingEdl(const PVR_RECORDING &recording, PVR_E
 
   // Search for commbreak list with defined unit
   Myth::MarkListPtr comList = m_control->GetCommBreakList(*(prog.GetPtr()), unit);
-  XBMC->Log(LOG_DEBUG, "%s: Found %d commercial breaks for: %s", __FUNCTION__, comList->size(), recording.strTitle);
+  kodi::Log(ADDON_LOG_DEBUG, "%s: Found %d commercial breaks for: %s", __FUNCTION__, comList->size(), recording.GetTitle().c_str());
   if (!comList->empty())
   {
     if (comList->front()->markType == Myth::MARK_COMM_END)
@@ -1446,7 +1521,7 @@ PVR_ERROR PVRClientMythTV::GetRecordingEdl(const PVR_RECORDING &recording, PVR_E
 
   // Search for cutting list with defined unit
   Myth::MarkListPtr cutList = m_control->GetCutList(*(prog.GetPtr()), unit);
-  XBMC->Log(LOG_DEBUG, "%s: Found %d cut list entries for: %s", __FUNCTION__, cutList->size(), recording.strTitle);
+  kodi::Log(ADDON_LOG_DEBUG, "%s: Found %d cut list entries for: %s", __FUNCTION__, cutList->size(), recording.GetTitle().c_str());
   if (!cutList->empty())
   {
     if (cutList->front()->markType == Myth::MARK_CUT_END)
@@ -1467,10 +1542,10 @@ PVR_ERROR PVRClientMythTV::GetRecordingEdl(const PVR_RECORDING &recording, PVR_E
   }
 
   // Open dialog
-  if (g_iEnableEDL == ENABLE_EDL_DIALOG && !skpList.empty())
+  if (CMythSettings::GetEnableEDL() == ENABLE_EDL_DIALOG && !skpList.empty())
   {
     bool canceled = false;
-    if (!GUI->Dialog_YesNo_ShowAndGetInput(XBMC->GetLocalizedString(30110), XBMC->GetLocalizedString(30111), canceled) && !canceled)
+    if (!kodi::gui::dialogs::YesNo::ShowAndGetInput(kodi::GetLocalizedString(30110), kodi::GetLocalizedString(30111), canceled) && !canceled)
       return PVR_ERROR_NO_ERROR;
   }
 
@@ -1491,24 +1566,25 @@ PVR_ERROR PVRClientMythTV::GetRecordingEdl(const PVR_RECORDING &recording, PVR_E
       case Myth::MARK_COMM_END:
         if (startPtr && startPtr->markType == Myth::MARK_COMM_START && (*it)->markValue > startPtr->markValue)
         {
-          PVR_EDL_ENTRY entry;
+          kodi::addon::PVREDLEntry entry;
           double s = (double)(startPtr->markValue) / rate;
           double e = (double)((*it)->markValue) / rate;
           // Use scene marker instead commercial break
-          if (g_iEnableEDL == ENABLE_EDL_SCENE)
+          if (CMythSettings::GetEnableEDL() == ENABLE_EDL_SCENE)
           {
-            entry.start = entry.end = (int64_t)(e * 1000.0);
-            entry.type = PVR_EDL_TYPE_SCENE;
-            XBMC->Log(LOG_DEBUG, "%s: SCENE %9.3f", __FUNCTION__, e);
+            entry.SetStart((int64_t)(e * 1000.0));
+            entry.SetEnd(entry.GetStart());
+            entry.SetType(PVR_EDL_TYPE_SCENE);
+            kodi::Log(ADDON_LOG_DEBUG, "%s: SCENE %9.3f", __FUNCTION__, e);
           }
           else
           {
-            entry.start = (int64_t)(s * 1000.0);
-            entry.end = (int64_t)(e * 1000.0);
-            entry.type = PVR_EDL_TYPE_COMBREAK;
-            XBMC->Log(LOG_DEBUG, "%s: COMBREAK %9.3f - %9.3f", __FUNCTION__, s, e);
+            entry.SetStart((int64_t)(s * 1000.0));
+            entry.SetEnd((int64_t)(e * 1000.0));
+            entry.SetType(PVR_EDL_TYPE_COMBREAK);
+            kodi::Log(ADDON_LOG_DEBUG, "%s: COMBREAK %9.3f - %9.3f", __FUNCTION__, s, e);
           }
-          entries[index] = entry;
+          edl.emplace_back(entry);
           index++;
         }
         startPtr.reset();
@@ -1516,16 +1592,16 @@ PVR_ERROR PVRClientMythTV::GetRecordingEdl(const PVR_RECORDING &recording, PVR_E
       case Myth::MARK_CUT_END:
         if (startPtr && startPtr->markType == Myth::MARK_CUT_START && (*it)->markValue > startPtr->markValue)
         {
-          PVR_EDL_ENTRY entry;
+          kodi::addon::PVREDLEntry entry;
           double s = (double)(startPtr->markValue) / rate;
           double e = (double)((*it)->markValue) / rate;
-          entry.start = (int64_t)(s * 1000.0);
-          entry.end = (int64_t)(e * 1000.0);
-          entry.type = PVR_EDL_TYPE_CUT;
-          entries[index] = entry;
+          entry.SetStart((int64_t)(s * 1000.0));
+          entry.SetEnd((int64_t)(e * 1000.0));
+          entry.SetType(PVR_EDL_TYPE_CUT);
+          edl.emplace_back(entry);
           index++;
-          if (g_bExtraDebug)
-            XBMC->Log(LOG_DEBUG, "%s: CUT %9.3f - %9.3f", __FUNCTION__, s, e);
+          if (CMythSettings::GetExtraDebug())
+            kodi::Log(ADDON_LOG_DEBUG, "%s: CUT %9.3f - %9.3f", __FUNCTION__, s, e);
         }
         startPtr.reset();
         break;
@@ -1534,46 +1610,45 @@ PVR_ERROR PVRClientMythTV::GetRecordingEdl(const PVR_RECORDING &recording, PVR_E
     }
   }
 
-  *size = index;
   return PVR_ERROR_NO_ERROR;
 }
 
-PVR_ERROR PVRClientMythTV::UndeleteRecording(const PVR_RECORDING &recording)
+PVR_ERROR PVRClientMythTV::UndeleteRecording(const kodi::addon::PVRRecording& recording)
 {
   if (!m_control)
     return PVR_ERROR_SERVER_ERROR;
-  XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   Myth::OS::CLockGuard lock(*m_recordingsLock);
 
-  ProgramInfoMap::iterator it = m_recordings.find(recording.strRecordingId);
+  ProgramInfoMap::iterator it = m_recordings.find(recording.GetRecordingId());
   if (it != m_recordings.end())
   {
     bool ret = m_control->UndeleteRecording(*(it->second.GetPtr()));
     if (ret)
     {
-      XBMC->Log(LOG_DEBUG, "%s: Undeleted recording %s", __FUNCTION__, recording.strRecordingId);
+      kodi::Log(ADDON_LOG_DEBUG, "%s: Undeleted recording %s", __FUNCTION__, recording.GetRecordingId().c_str());
       return PVR_ERROR_NO_ERROR;
     }
     else
     {
-      XBMC->Log(LOG_ERROR, "%s: Failed to undelete recording %s", __FUNCTION__, recording.strRecordingId);
+      kodi::Log(ADDON_LOG_ERROR, "%s: Failed to undelete recording %s", __FUNCTION__, recording.GetRecordingId().c_str());
     }
   }
   else
   {
-    XBMC->Log(LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.strRecordingId);
+    kodi::Log(ADDON_LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.GetRecordingId().c_str());
   }
   return PVR_ERROR_FAILED;
 }
 
-PVR_ERROR PVRClientMythTV::PurgeDeletedRecordings()
+PVR_ERROR PVRClientMythTV::DeleteAllRecordingsFromTrash()
 {
   if (!m_control)
     return PVR_ERROR_SERVER_ERROR;
   bool err = false;
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   Myth::OS::CLockGuard lock(*m_recordingsLock);
 
@@ -1582,11 +1657,11 @@ PVR_ERROR PVRClientMythTV::PurgeDeletedRecordings()
     if (!it->second.IsNull() && it->second.IsDeleted())
     {
       if (m_control->DeleteRecording(*(it->second.GetPtr())))
-        XBMC->Log(LOG_DEBUG, "%s: Deleted recording %s", __FUNCTION__, it->first.c_str());
+        kodi::Log(ADDON_LOG_DEBUG, "%s: Deleted recording %s", __FUNCTION__, it->first.c_str());
       else
       {
         err = true;
-        XBMC->Log(LOG_ERROR, "%s: Failed to delete recording %s", __FUNCTION__, it->first.c_str());
+        kodi::Log(ADDON_LOG_ERROR, "%s: Failed to delete recording %s", __FUNCTION__, it->first.c_str());
       }
     }
   }
@@ -1595,22 +1670,22 @@ PVR_ERROR PVRClientMythTV::PurgeDeletedRecordings()
   return PVR_ERROR_NO_ERROR;
 }
 
-PVR_ERROR PVRClientMythTV::GetRecordingSize(const PVR_RECORDING &recording, int64_t *bytes)
+PVR_ERROR PVRClientMythTV::GetRecordingSize(const kodi::addon::PVRRecording& recording, int64_t& bytes)
 {
   if (!m_control)
     return PVR_ERROR_SERVER_ERROR;
-  *bytes = 0;
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: %s", __FUNCTION__, recording.strTitle);
+  bytes = 0;
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: %s", __FUNCTION__, recording.GetTitle().c_str());
   // Check recording
   Myth::OS::CLockGuard lock(*m_recordingsLock);
-  ProgramInfoMap::iterator it = m_recordings.find(recording.strRecordingId);
+  ProgramInfoMap::iterator it = m_recordings.find(recording.GetRecordingId());
   if (it == m_recordings.end())
   {
-    XBMC->Log(LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.strRecordingId);
+    kodi::Log(ADDON_LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.GetRecordingId().c_str());
     return PVR_ERROR_INVALID_PARAMETERS;
   }
-  *bytes = it->second.FileSize();
+  bytes = it->second.FileSize();
   return PVR_ERROR_NO_ERROR;
 }
 
@@ -1635,22 +1710,24 @@ bool PVRClientMythTV::IsMyLiveRecording(const MythProgramInfo& programInfo)
   return false;
 }
 
-int PVRClientMythTV::GetTimersAmount(void)
+PVR_ERROR PVRClientMythTV::GetTimersAmount(int& amount)
 {
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   if (m_scheduleManager)
-    return m_scheduleManager->GetUpcomingCount();
-  return 0;
+    amount = m_scheduleManager->GetUpcomingCount();
+  else
+    amount = 0;
+  return PVR_ERROR_NO_ERROR;
 }
 
-PVR_ERROR PVRClientMythTV::GetTimers(ADDON_HANDLE handle)
+PVR_ERROR PVRClientMythTV::GetTimers(kodi::addon::PVRTimersResultSet& results)
 {
   if (!m_scheduleManager)
     return PVR_ERROR_SERVER_ERROR;
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   MythTimerEntryList entries;
   {
@@ -1660,17 +1737,16 @@ PVR_ERROR PVRClientMythTV::GetTimers(ADDON_HANDLE handle)
   }
   for (MythTimerEntryList::const_iterator it = entries.begin(); it != entries.end(); ++it)
   {
-    PVR_TIMER tag;
-    memset(&tag, 0, sizeof(PVR_TIMER));
+    kodi::addon::PVRTimer tag;
 
-    tag.iClientIndex = (*it)->entryIndex;
-    tag.iParentClientIndex = (*it)->parentIndex;
-    tag.iClientChannelUid = FindPVRChannelUid((*it)->chanid);
-    tag.startTime = (*it)->startTime;
-    tag.endTime = (*it)->endTime;
+    tag.SetClientIndex((*it)->entryIndex);
+    tag.SetParentClientIndex((*it)->parentIndex);
+    tag.SetClientChannelUid(FindPVRChannelUid((*it)->chanid));
+    tag.SetStartTime((*it)->startTime);
+    tag.SetEndTime((*it)->endTime);
 
     // Discard upcoming without valid channel uid
-    if (tag.iClientChannelUid == PVR_CHANNEL_INVALID_UID && !(*it)->isRule)
+    if (tag.GetClientChannelUid() == PVR_CHANNEL_INVALID_UID && !(*it)->isRule)
       continue;
 
     // Status: Match recording status with PVR_TIMER status
@@ -1680,25 +1756,25 @@ PVR_ERROR PVRClientMythTV::GetTimers(ADDON_HANDLE handle)
     case Myth::RS_MISSED:
     case Myth::RS_NOT_LISTED:
     case Myth::RS_OFFLINE:
-      tag.state = PVR_TIMER_STATE_ABORTED;
+      tag.SetState(PVR_TIMER_STATE_ABORTED);
       break;
     case Myth::RS_RECORDING:
     case Myth::RS_TUNING:
-      tag.state = PVR_TIMER_STATE_RECORDING;
+      tag.SetState(PVR_TIMER_STATE_RECORDING);
       break;
     case Myth::RS_RECORDED:
-      tag.state = PVR_TIMER_STATE_COMPLETED;
+      tag.SetState(PVR_TIMER_STATE_COMPLETED);
       break;
     case Myth::RS_WILL_RECORD:
-      tag.state = PVR_TIMER_STATE_SCHEDULED;
+      tag.SetState(PVR_TIMER_STATE_SCHEDULED);
       break;
     case Myth::RS_CONFLICT:
-      tag.state = PVR_TIMER_STATE_CONFLICT_NOK;
+      tag.SetState(PVR_TIMER_STATE_CONFLICT_NOK);
       break;
     case Myth::RS_FAILED:
     case Myth::RS_TUNER_BUSY:
     case Myth::RS_LOW_DISKSPACE:
-      tag.state = PVR_TIMER_STATE_ERROR;
+      tag.SetState(PVR_TIMER_STATE_ERROR);
       break;
     case Myth::RS_INACTIVE:
     case Myth::RS_EARLIER_RECORDING:  //Another entry in the list will record 'earlier'
@@ -1710,85 +1786,85 @@ PVR_ERROR PVRClientMythTV::GetTimers(ADDON_HANDLE handle)
     case Myth::RS_REPEAT:
     case Myth::RS_DONT_RECORD:
     case Myth::RS_NEVER_RECORD:
-      tag.state = PVR_TIMER_STATE_DISABLED;
+      tag.SetState(PVR_TIMER_STATE_DISABLED);
       break;
     case Myth::RS_CANCELLED:
-      tag.state = PVR_TIMER_STATE_CANCELLED;
+      tag.SetState(PVR_TIMER_STATE_CANCELLED);
       break;
     case Myth::RS_UNKNOWN:
       if ((*it)->isInactive)
-        tag.state = PVR_TIMER_STATE_DISABLED;
+        tag.SetState(PVR_TIMER_STATE_DISABLED);
       else
-        tag.state = PVR_TIMER_STATE_SCHEDULED;
+        tag.SetState(PVR_TIMER_STATE_SCHEDULED);
     }
 
-    tag.iTimerType = static_cast<unsigned>((*it)->timerType);
-    PVR_STRCPY(tag.strTitle, (*it)->title.c_str());
-    PVR_STRCPY(tag.strEpgSearchString, (*it)->epgSearch.c_str());
-    tag.bFullTextEpgSearch = false;
-    PVR_STRCPY(tag.strDirectory, ""); // not implemented
-    PVR_STRCPY(tag.strSummary, (*it)->description.c_str());
-    tag.iPriority = (*it)->priority;
-    tag.iLifetime = (*it)->expiration;
-    tag.iRecordingGroup = (*it)->recordingGroup;
-    tag.firstDay = (*it)->startTime; // using startTime
-    tag.iWeekdays = PVR_WEEKDAY_NONE; // not implemented
-    tag.iPreventDuplicateEpisodes = static_cast<unsigned>((*it)->dupMethod);
+    tag.SetTimerType(static_cast<unsigned>((*it)->timerType));
+    tag.SetTitle((*it)->title);
+    tag.SetEPGSearchString((*it)->epgSearch.c_str());
+    tag.SetFullTextEpgSearch(false);
+    tag.SetDirectory(""); // not implemented
+    tag.SetSummary((*it)->description);
+    tag.SetPriority((*it)->priority);
+    tag.SetLifetime((*it)->expiration);
+    tag.SetRecordingGroup((*it)->recordingGroup);
+    tag.SetFirstDay((*it)->startTime); // using startTime
+    tag.SetWeekdays(PVR_WEEKDAY_NONE); // not implemented
+    tag.SetPreventDuplicateEpisodes(static_cast<unsigned>((*it)->dupMethod));
     if ((*it)->epgCheck)
-      tag.iEpgUid = MythEPGInfo::MakeBroadcastID(FindPVRChannelUid((*it)->epgInfo.ChannelID()) , (*it)->epgInfo.StartTime());
-    tag.iMarginStart = (*it)->startOffset;
-    tag.iMarginEnd = (*it)->endOffset;
+      tag.SetEPGUid(MythEPGInfo::MakeBroadcastID(FindPVRChannelUid((*it)->epgInfo.ChannelID()) , (*it)->epgInfo.StartTime()));
+    tag.SetMarginStart((*it)->startOffset);
+    tag.SetMarginEnd((*it)->endOffset);
     int genre = m_categories.Category((*it)->category);
-    tag.iGenreType = genre & 0xF0;
-    tag.iGenreSubType = genre & 0x0F;
+    tag.SetGenreType(genre & 0xF0);
+    tag.SetGenreSubType(genre & 0x0F);
 
     // Add it to memorandom: cf UpdateTimer()
-    MYTH_SHARED_PTR<PVR_TIMER> pTag = MYTH_SHARED_PTR<PVR_TIMER>(new PVR_TIMER(tag));
-    m_PVRtimerMemorandum.insert(std::make_pair(static_cast<unsigned int>(tag.iClientIndex), pTag));
-    PVR->TransferTimerEntry(handle, &tag);
-    if (g_bExtraDebug)
-      XBMC->Log(LOG_DEBUG, "%s: #%u: IN=%d RS=%d type %u state %d parent %u autoexpire %d", __FUNCTION__,
-              tag.iClientIndex, (*it)->isInactive, (*it)->recordingStatus,
-              tag.iTimerType, (int)tag.state, tag.iParentClientIndex, tag.iLifetime);
+    MYTH_SHARED_PTR<kodi::addon::PVRTimer> pTag = MYTH_SHARED_PTR<kodi::addon::PVRTimer>(new kodi::addon::PVRTimer(tag));
+    m_PVRtimerMemorandum.insert(std::make_pair(static_cast<unsigned int>(tag.GetClientIndex()), pTag));
+    results.Add(tag);
+    if (CMythSettings::GetExtraDebug())
+      kodi::Log(ADDON_LOG_DEBUG, "%s: #%u: IN=%d RS=%d type %u state %d parent %u autoexpire %d", __FUNCTION__,
+              tag.GetClientIndex(), (*it)->isInactive, (*it)->recordingStatus,
+              tag.GetTimerType(), (int)tag.GetState(), tag.GetParentClientIndex(), tag.GetLifetime());
   }
 
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Done", __FUNCTION__);
 
   return PVR_ERROR_NO_ERROR;
 }
 
-PVR_ERROR PVRClientMythTV::AddTimer(const PVR_TIMER &timer)
+PVR_ERROR PVRClientMythTV::AddTimer(const kodi::addon::PVRTimer& timer)
 {
   if (!m_scheduleManager)
     return PVR_ERROR_SERVER_ERROR;
-  if (g_bExtraDebug)
+  if (CMythSettings::GetExtraDebug())
   {
-    XBMC->Log(LOG_DEBUG, "%s: iClientIndex = %d", __FUNCTION__, timer.iClientIndex);
-    XBMC->Log(LOG_DEBUG, "%s: iParentClientIndex = %d", __FUNCTION__, timer.iParentClientIndex);
-    XBMC->Log(LOG_DEBUG, "%s: iClientChannelUid = %d", __FUNCTION__, timer.iClientChannelUid);
-    XBMC->Log(LOG_DEBUG, "%s: startTime = %ld", __FUNCTION__, timer.startTime);
-    XBMC->Log(LOG_DEBUG, "%s: endTime = %ld", __FUNCTION__, timer.endTime);
-    XBMC->Log(LOG_DEBUG, "%s: state = %d", __FUNCTION__, timer.state);
-    XBMC->Log(LOG_DEBUG, "%s: iTimerType = %d", __FUNCTION__, timer.iTimerType);
-    XBMC->Log(LOG_DEBUG, "%s: strTitle = %s", __FUNCTION__, timer.strTitle);
-    XBMC->Log(LOG_DEBUG, "%s: strEpgSearchString = %s", __FUNCTION__, timer.strEpgSearchString);
-    XBMC->Log(LOG_DEBUG, "%s: bFullTextEpgSearch = %d", __FUNCTION__, timer.bFullTextEpgSearch);
-    XBMC->Log(LOG_DEBUG, "%s: strDirectory = %s", __FUNCTION__, timer.strDirectory);
-    XBMC->Log(LOG_DEBUG, "%s: strSummary = %s", __FUNCTION__, timer.strSummary);
-    XBMC->Log(LOG_DEBUG, "%s: iPriority = %d", __FUNCTION__, timer.iPriority);
-    XBMC->Log(LOG_DEBUG, "%s: iLifetime = %d", __FUNCTION__, timer.iLifetime);
-    XBMC->Log(LOG_DEBUG, "%s: firstDay = %d", __FUNCTION__, timer.firstDay);
-    XBMC->Log(LOG_DEBUG, "%s: iWeekdays = %d", __FUNCTION__, timer.iWeekdays);
-    XBMC->Log(LOG_DEBUG, "%s: iPreventDuplicateEpisodes = %d", __FUNCTION__, timer.iPreventDuplicateEpisodes);
-    XBMC->Log(LOG_DEBUG, "%s: iEpgUid = %d", __FUNCTION__, timer.iEpgUid);
-    XBMC->Log(LOG_DEBUG, "%s: iMarginStart = %d", __FUNCTION__, timer.iMarginStart);
-    XBMC->Log(LOG_DEBUG, "%s: iMarginEnd = %d", __FUNCTION__, timer.iMarginEnd);
-    XBMC->Log(LOG_DEBUG, "%s: iGenreType = %d", __FUNCTION__, timer.iGenreType);
-    XBMC->Log(LOG_DEBUG, "%s: iGenreSubType = %d", __FUNCTION__, timer.iGenreSubType);
-    XBMC->Log(LOG_DEBUG, "%s: iRecordingGroup = %d", __FUNCTION__, timer.iRecordingGroup);
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iClientIndex = %d", __FUNCTION__, timer.GetClientIndex());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iParentClientIndex = %d", __FUNCTION__, timer.GetParentClientIndex());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iClientChannelUid = %d", __FUNCTION__, timer.GetClientChannelUid());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: startTime = %ld", __FUNCTION__, timer.GetStartTime());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: endTime = %ld", __FUNCTION__, timer.GetEndTime());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: state = %d", __FUNCTION__, timer.GetState());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iTimerType = %d", __FUNCTION__, timer.GetTimerType());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: strTitle = %s", __FUNCTION__, timer.GetTitle().c_str());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: strEpgSearchString = %s", __FUNCTION__, timer.GetEPGSearchString().c_str());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: bFullTextEpgSearch = %d", __FUNCTION__, timer.GetFullTextEpgSearch());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: strDirectory = %s", __FUNCTION__, timer.GetDirectory().c_str());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: strSummary = %s", __FUNCTION__, timer.GetSummary().c_str());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iPriority = %d", __FUNCTION__, timer.GetPriority());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iLifetime = %d", __FUNCTION__, timer.GetLifetime());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: firstDay = %d", __FUNCTION__, timer.GetFirstDay());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iWeekdays = %d", __FUNCTION__, timer.GetWeekdays());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iPreventDuplicateEpisodes = %d", __FUNCTION__, timer.GetPreventDuplicateEpisodes());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iEpgUid = %d", __FUNCTION__, timer.GetEPGUid());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iMarginStart = %d", __FUNCTION__, timer.GetMarginStart());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iMarginEnd = %d", __FUNCTION__, timer.GetMarginEnd());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iGenreType = %d", __FUNCTION__, timer.GetGenreType());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iGenreSubType = %d", __FUNCTION__, timer.GetGenreSubType());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iRecordingGroup = %d", __FUNCTION__, timer.GetRecordingGroup());
   }
-  XBMC->Log(LOG_DEBUG, "%s: title: %s, start: %ld, end: %ld, chanID: %u", __FUNCTION__, timer.strTitle, timer.startTime, timer.endTime, timer.iClientChannelUid);
+  kodi::Log(ADDON_LOG_DEBUG, "%s: title: %s, start: %ld, end: %ld, chanID: %u", __FUNCTION__, timer.GetTitle().c_str(), timer.GetStartTime(), timer.GetEndTime(), timer.GetClientChannelUid());
   Myth::OS::CLockGuard lock(*m_lock);
   // Check if our timer is a quick recording of live tv
   // Assumptions: Our live recorder is locked on the same channel and the recording starts
@@ -1797,12 +1873,12 @@ PVR_ERROR PVRClientMythTV::AddTimer(const PVR_TIMER &timer)
   if (m_liveStream && m_liveStream->IsPlaying())
   {
     Myth::ProgramPtr program = m_liveStream->GetPlayedProgram();
-    if (timer.iClientChannelUid == FindPVRChannelUid(program->channel.chanId) &&
-        timer.startTime <= program->startTime)
+    if (timer.GetClientChannelUid() == FindPVRChannelUid(program->channel.chanId) &&
+        timer.GetStartTime() <= program->startTime)
     {
-      XBMC->Log(LOG_DEBUG, "%s: Timer is a quick recording. Toggling Record on", __FUNCTION__);
+      kodi::Log(ADDON_LOG_DEBUG, "%s: Timer is a quick recording. Toggling Record on", __FUNCTION__);
       if (m_liveStream->IsLiveRecording())
-        XBMC->Log(LOG_INFO, "%s: Record already on! Retrying...", __FUNCTION__);
+        kodi::Log(ADDON_LOG_INFO, "%s: Record already on! Retrying...", __FUNCTION__);
       else
       {
         // Add bookmark for the current stream position
@@ -1817,7 +1893,7 @@ PVR_ERROR PVRClientMythTV::AddTimer(const PVR_TIMER &timer)
   }
 
   // Otherwise submit the new timer
-  XBMC->Log(LOG_DEBUG, "%s: Submitting new timer", __FUNCTION__);
+  kodi::Log(ADDON_LOG_DEBUG, "%s: Submitting new timer", __FUNCTION__);
   MythTimerEntry entry = PVRtoTimerEntry(timer, true);
   MythScheduleManager::MSM_ERROR ret = m_scheduleManager->SubmitTimer(entry);
   if (ret == MythScheduleManager::MSM_ERROR_FAILED)
@@ -1830,15 +1906,15 @@ PVR_ERROR PVRClientMythTV::AddTimer(const PVR_TIMER &timer)
   return PVR_ERROR_NO_ERROR;
 }
 
-PVR_ERROR PVRClientMythTV::DeleteTimer(const PVR_TIMER &timer, bool force)
+PVR_ERROR PVRClientMythTV::DeleteTimer(const kodi::addon::PVRTimer& timer, bool force)
 {
   if (!m_scheduleManager)
     return PVR_ERROR_SERVER_ERROR;
-  if (g_bExtraDebug)
+  if (CMythSettings::GetExtraDebug())
   {
-    XBMC->Log(LOG_DEBUG, "%s: iClientIndex = %d", __FUNCTION__, timer.iClientIndex);
-    XBMC->Log(LOG_DEBUG, "%s: state = %d", __FUNCTION__, timer.state);
-    XBMC->Log(LOG_DEBUG, "%s: iTimerType = %d", __FUNCTION__, timer.iTimerType);
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iClientIndex = %d", __FUNCTION__, timer.GetClientIndex());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: state = %d", __FUNCTION__, timer.GetState());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iTimerType = %d", __FUNCTION__, timer.GetTimerType());
   }
   // Check if our timer is related to rule for live recording:
   // Assumptions: Recorder handle same recording.
@@ -1847,14 +1923,14 @@ PVR_ERROR PVRClientMythTV::DeleteTimer(const PVR_TIMER &timer, bool force)
     Myth::OS::CLockGuard lock(*m_lock);
     if (m_liveStream && m_liveStream->IsLiveRecording())
     {
-      MythRecordingRuleNodePtr node = m_scheduleManager->FindRuleByIndex(timer.iClientIndex);
+      MythRecordingRuleNodePtr node = m_scheduleManager->FindRuleByIndex(timer.GetClientIndex());
       if (node)
       {
         MythScheduleList reclist = m_scheduleManager->FindUpComingByRuleId(node->GetRule().RecordID());
         MythScheduleList::const_iterator it = reclist.begin();
         if (it != reclist.end() && it->second && IsMyLiveRecording(*(it->second)))
         {
-          XBMC->Log(LOG_DEBUG, "%s: Timer %u is a quick recording. Toggling Record off", __FUNCTION__, timer.iClientIndex);
+          kodi::Log(ADDON_LOG_DEBUG, "%s: Timer %u is a quick recording. Toggling Record off", __FUNCTION__, timer.GetClientIndex());
           if (m_liveStream->KeepLiveRecording(false))
             return PVR_ERROR_NO_ERROR;
           else
@@ -1865,7 +1941,7 @@ PVR_ERROR PVRClientMythTV::DeleteTimer(const PVR_TIMER &timer, bool force)
   }
 
   // Otherwise delete timer
-  XBMC->Log(LOG_DEBUG, "%s: Deleting timer %u force %s", __FUNCTION__, timer.iClientIndex, (force ? "true" : "false"));
+  kodi::Log(ADDON_LOG_DEBUG, "%s: Deleting timer %u force %s", __FUNCTION__, timer.GetClientIndex(), (force ? "true" : "false"));
   MythTimerEntry entry = PVRtoTimerEntry(timer, false);
   MythScheduleManager::MSM_ERROR ret = m_scheduleManager->DeleteTimer(entry);
   if (ret == MythScheduleManager::MSM_ERROR_FAILED)
@@ -1876,7 +1952,7 @@ PVR_ERROR PVRClientMythTV::DeleteTimer(const PVR_TIMER &timer, bool force)
   return PVR_ERROR_NO_ERROR;
 }
 
-MythTimerEntry PVRClientMythTV::PVRtoTimerEntry(const PVR_TIMER& timer, bool checkEPG)
+MythTimerEntry PVRClientMythTV::PVRtoTimerEntry(const kodi::addon::PVRTimer& timer, bool checkEPG)
 {
   MythTimerEntry entry;
 
@@ -1884,17 +1960,17 @@ MythTimerEntry PVRClientMythTV::PVRtoTimerEntry(const PVR_TIMER& timer, bool che
   bool hasTimeslot = false;
   bool hasChannel = false;
   bool hasEpgSearch = false;
-  time_t st = timer.startTime;
-  time_t et = timer.endTime;
-  time_t fd = timer.firstDay;
+  time_t st = timer.GetStartTime();
+  time_t et = timer.GetEndTime();
+  time_t fd = timer.GetFirstDay();
   time_t now = time(NULL);
 
-  if (checkEPG && timer.iEpgUid != PVR_TIMER_NO_EPG_UID)
+  if (checkEPG && timer.GetEPGUid() != PVR_TIMER_NO_EPG_UID)
   {
     entry.epgCheck = true;
     hasEpg = true;
   }
-  if (timer.iClientChannelUid != PVR_TIMER_ANY_CHANNEL)
+  if (timer.GetClientChannelUid() != PVR_TIMER_ANY_CHANNEL)
   {
     hasChannel = true;
   }
@@ -1949,25 +2025,25 @@ MythTimerEntry PVRClientMythTV::PVRtoTimerEntry(const PVR_TIMER& timer, bool che
       et = mktime(&newtm);
     }
   }
-  if (*(timer.strEpgSearchString))
+  if (!timer.GetEPGSearchString().empty())
   {
     hasEpgSearch = true;
   }
 
-  XBMC->Log(LOG_DEBUG, "%s: EPG=%d CHAN=%d TS=%d SEARCH=%d", __FUNCTION__, hasEpg, hasChannel, hasTimeslot, hasEpgSearch);
+  kodi::Log(ADDON_LOG_DEBUG, "%s: EPG=%d CHAN=%d TS=%d SEARCH=%d", __FUNCTION__, hasEpg, hasChannel, hasTimeslot, hasEpgSearch);
 
   // Fill EPG
   if (hasEpg && m_control)
   {
     unsigned bid;
     time_t bst;
-    MythEPGInfo::BreakBroadcastID(timer.iEpgUid, &bid, &bst);
-    XBMC->Log(LOG_DEBUG, "%s: broadcastid=%u chanid=%u localtime=%s", __FUNCTION__, (unsigned)timer.iEpgUid, bid, Myth::TimeToString(bst, false).c_str());
+    MythEPGInfo::BreakBroadcastID(timer.GetEPGUid(), &bid, &bst);
+    kodi::Log(ADDON_LOG_DEBUG, "%s: broadcastid=%u chanid=%u localtime=%s", __FUNCTION__, (unsigned)timer.GetEPGUid(), bid, Myth::TimeToString(bst, false).c_str());
     // Retrieve broadcast using prior selected channel if valid else use original channel
     if (hasChannel)
     {
-      bid = static_cast<unsigned>(timer.iClientChannelUid);
-      XBMC->Log(LOG_DEBUG, "%s: original chanid is overridden with id %u", __FUNCTION__, bid);
+      bid = static_cast<unsigned>(timer.GetClientChannelUid());
+      kodi::Log(ADDON_LOG_DEBUG, "%s: original chanid is overridden with id %u", __FUNCTION__, bid);
     }
     Myth::ProgramMapPtr epg = m_control->GetProgramGuide(bid, bst, bst);
     Myth::ProgramMap::iterator epgit = epg->begin();
@@ -1985,27 +2061,27 @@ MythTimerEntry PVRClientMythTV::PVRtoTimerEntry(const PVR_TIMER& timer, bool che
       entry.callsign = epgit->second->channel.callSign;
       st = entry.epgInfo.StartTime();
       et = entry.epgInfo.EndTime();
-      XBMC->Log(LOG_INFO, "%s: select EPG program: %u %lu %s", __FUNCTION__, entry.chanid, st, entry.epgInfo.Title().c_str());
+      kodi::Log(ADDON_LOG_INFO, "%s: select EPG program: %u %lu %s", __FUNCTION__, entry.chanid, st, entry.epgInfo.Title().c_str());
     }
     else
     {
-      XBMC->Log(LOG_INFO, "%s: EPG program not found: %u %lu", __FUNCTION__, bid, bst);
+      kodi::Log(ADDON_LOG_INFO, "%s: EPG program not found: %u %lu", __FUNCTION__, bid, bst);
       hasEpg = false;
     }
   }
   // Fill channel
   if (!hasEpg && hasChannel)
   {
-    MythChannel channel = FindChannel(timer.iClientChannelUid);
+    MythChannel channel = FindChannel(timer.GetClientChannelUid());
     if (!channel.IsNull())
     {
       entry.chanid = channel.ID();
       entry.callsign = channel.Callsign();
-      XBMC->Log(LOG_DEBUG,"%s: Found channel: %u %s", __FUNCTION__, entry.chanid, entry.callsign.c_str());
+      kodi::Log(ADDON_LOG_DEBUG,"%s: Found channel: %u %s", __FUNCTION__, entry.chanid, entry.callsign.c_str());
     }
     else
     {
-      XBMC->Log(LOG_INFO,"%s: Channel not found: %u", __FUNCTION__, timer.iClientChannelUid);
+      kodi::Log(ADDON_LOG_INFO,"%s: Channel not found: %u", __FUNCTION__, timer.GetClientChannelUid());
       hasChannel = false;
     }
   }
@@ -2018,70 +2094,70 @@ MythTimerEntry PVRClientMythTV::PVRtoTimerEntry(const PVR_TIMER& timer, bool che
   if (hasEpgSearch)
   {
     unsigned i = 0;
-    while (timer.strEpgSearchString[i] && isspace(timer.strEpgSearchString[i] != 0)) ++i;
-    if (timer.strEpgSearchString[i])
-      entry.epgSearch.assign(&(timer.strEpgSearchString[i]));
+    while (timer.GetEPGSearchString()[i] && isspace(timer.GetEPGSearchString()[i] != 0)) ++i;
+    if (timer.GetEPGSearchString()[i])
+      entry.epgSearch.assign(&(timer.GetEPGSearchString()[i]));
   }
-  entry.timerType = static_cast<TimerTypeId>(timer.iTimerType);
-  entry.title.assign(timer.strTitle);
-  entry.description.assign(timer.strSummary);
-  entry.category.assign(m_categories.Category(timer.iGenreType));
-  entry.startOffset = timer.iMarginStart;
-  entry.endOffset = timer.iMarginEnd;
-  entry.dupMethod = static_cast<Myth::DM_t>(timer.iPreventDuplicateEpisodes);
-  entry.priority = timer.iPriority;
-  entry.expiration = timer.iLifetime;
+  entry.timerType = static_cast<TimerTypeId>(timer.GetTimerType());
+  entry.title.assign(timer.GetTitle());
+  entry.description.assign(timer.GetSummary());
+  entry.category.assign(m_categories.Category(timer.GetGenreType()));
+  entry.startOffset = timer.GetMarginStart();
+  entry.endOffset = timer.GetMarginEnd();
+  entry.dupMethod = static_cast<Myth::DM_t>(timer.GetPreventDuplicateEpisodes());
+  entry.priority = timer.GetPriority();
+  entry.expiration = timer.GetLifetime();
   entry.firstShowing = false;
-  entry.recordingGroup = timer.iRecordingGroup;
-  if (timer.iTimerType == TIMER_TYPE_DONT_RECORD)
-    entry.isInactive = (timer.state == PVR_TIMER_STATE_DISABLED ? false : true);
+  entry.recordingGroup = timer.GetRecordingGroup();
+  if (timer.GetTimerType() == TIMER_TYPE_DONT_RECORD)
+    entry.isInactive = (timer.GetState() == PVR_TIMER_STATE_DISABLED ? false : true);
   else
-    entry.isInactive = (timer.state == PVR_TIMER_STATE_DISABLED ? true : false);
-  entry.entryIndex = timer.iClientIndex;
-  entry.parentIndex = timer.iParentClientIndex;
+    entry.isInactive = (timer.GetState() == PVR_TIMER_STATE_DISABLED ? true : false);
+  entry.entryIndex = timer.GetClientIndex();
+  entry.parentIndex = timer.GetParentClientIndex();
   return entry;
 }
 
-PVR_ERROR PVRClientMythTV::UpdateTimer(const PVR_TIMER &timer)
+PVR_ERROR PVRClientMythTV::UpdateTimer(const kodi::addon::PVRTimer& timer)
 {
   if (!m_scheduleManager)
     return PVR_ERROR_SERVER_ERROR;
-  if (g_bExtraDebug)
+  if (CMythSettings::GetExtraDebug())
   {
-    XBMC->Log(LOG_DEBUG, "%s: iClientIndex = %d", __FUNCTION__, timer.iClientIndex);
-    XBMC->Log(LOG_DEBUG, "%s: iParentClientIndex = %d", __FUNCTION__, timer.iParentClientIndex);
-    XBMC->Log(LOG_DEBUG, "%s: iClientChannelUid = %d", __FUNCTION__, timer.iClientChannelUid);
-    XBMC->Log(LOG_DEBUG, "%s: startTime = %ld", __FUNCTION__, timer.startTime);
-    XBMC->Log(LOG_DEBUG, "%s: endTime = %ld", __FUNCTION__, timer.endTime);
-    XBMC->Log(LOG_DEBUG, "%s: state = %d", __FUNCTION__, timer.state);
-    XBMC->Log(LOG_DEBUG, "%s: iTimerType = %d", __FUNCTION__, timer.iTimerType);
-    XBMC->Log(LOG_DEBUG, "%s: strTitle = %s", __FUNCTION__, timer.strTitle);
-    XBMC->Log(LOG_DEBUG, "%s: strEpgSearchString = %s", __FUNCTION__, timer.strEpgSearchString);
-    XBMC->Log(LOG_DEBUG, "%s: bFullTextEpgSearch = %d", __FUNCTION__, timer.bFullTextEpgSearch);
-    XBMC->Log(LOG_DEBUG, "%s: strDirectory = %s", __FUNCTION__, timer.strDirectory);
-    XBMC->Log(LOG_DEBUG, "%s: strSummary = %s", __FUNCTION__, timer.strSummary);
-    XBMC->Log(LOG_DEBUG, "%s: iPriority = %d", __FUNCTION__, timer.iPriority);
-    XBMC->Log(LOG_DEBUG, "%s: iLifetime = %d", __FUNCTION__, timer.iLifetime);
-    XBMC->Log(LOG_DEBUG, "%s: firstDay = %d", __FUNCTION__, timer.firstDay);
-    XBMC->Log(LOG_DEBUG, "%s: iWeekdays = %d", __FUNCTION__, timer.iWeekdays);
-    XBMC->Log(LOG_DEBUG, "%s: iPreventDuplicateEpisodes = %d", __FUNCTION__, timer.iPreventDuplicateEpisodes);
-    XBMC->Log(LOG_DEBUG, "%s: iEpgUid = %d", __FUNCTION__, timer.iEpgUid);
-    XBMC->Log(LOG_DEBUG, "%s: iMarginStart = %d", __FUNCTION__, timer.iMarginStart);
-    XBMC->Log(LOG_DEBUG, "%s: iMarginEnd = %d", __FUNCTION__, timer.iMarginEnd);
-    XBMC->Log(LOG_DEBUG, "%s: iGenreType = %d", __FUNCTION__, timer.iGenreType);
-    XBMC->Log(LOG_DEBUG, "%s: iGenreSubType = %d", __FUNCTION__, timer.iGenreSubType);
-    XBMC->Log(LOG_DEBUG, "%s: iRecordingGroup = %d", __FUNCTION__, timer.iRecordingGroup);
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iClientIndex = %d", __FUNCTION__, timer.GetClientIndex());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iParentClientIndex = %d", __FUNCTION__, timer.GetParentClientIndex());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iClientChannelUid = %d", __FUNCTION__, timer.GetClientChannelUid());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: startTime = %ld", __FUNCTION__, timer.GetStartTime());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: endTime = %ld", __FUNCTION__, timer.GetEndTime());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: state = %d", __FUNCTION__, timer.GetState());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iTimerType = %d", __FUNCTION__, timer.GetTimerType());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: strTitle = %s", __FUNCTION__, timer.GetTitle().c_str());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: strEpgSearchString = %s", __FUNCTION__, timer.GetEPGSearchString().c_str());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: bFullTextEpgSearch = %d", __FUNCTION__, timer.GetFullTextEpgSearch());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: strDirectory = %s", __FUNCTION__, timer.GetDirectory().c_str());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: strSummary = %s", __FUNCTION__, timer.GetSummary().c_str());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iPriority = %d", __FUNCTION__, timer.GetPriority());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iLifetime = %d", __FUNCTION__, timer.GetLifetime());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: firstDay = %d", __FUNCTION__, timer.GetFirstDay());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iWeekdays = %d", __FUNCTION__, timer.GetWeekdays());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iPreventDuplicateEpisodes = %d", __FUNCTION__, timer.GetPreventDuplicateEpisodes());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iEpgUid = %d", __FUNCTION__, timer.GetEPGUid());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iMarginStart = %d", __FUNCTION__, timer.GetMarginStart());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iMarginEnd = %d", __FUNCTION__, timer.GetMarginEnd());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iGenreType = %d", __FUNCTION__, timer.GetGenreType());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iGenreSubType = %d", __FUNCTION__, timer.GetGenreSubType());
+    kodi::Log(ADDON_LOG_DEBUG, "%s: iRecordingGroup = %d", __FUNCTION__, timer.GetRecordingGroup());
   }
-  XBMC->Log(LOG_DEBUG, "%s: title: %s, start: %ld, end: %ld, chanID: %u", __FUNCTION__, timer.strTitle, timer.startTime, timer.endTime, timer.iClientChannelUid);
+  kodi::Log(ADDON_LOG_DEBUG, "%s: title: %s, start: %ld, end: %ld, chanID: %u", __FUNCTION__, timer.GetTitle().c_str(), timer.GetStartTime(), timer.GetEndTime(), timer.GetClientChannelUid());
   MythTimerEntry entry;
   // Restore discarded info by PVR manager from our saved timer
   {
     Myth::OS::CLockGuard lock(*m_lock);
-    std::map<unsigned int, MYTH_SHARED_PTR<PVR_TIMER> >::const_iterator it = m_PVRtimerMemorandum.find(timer.iClientIndex);
+    std::map<unsigned int, MYTH_SHARED_PTR<kodi::addon::PVRTimer> >::const_iterator it = m_PVRtimerMemorandum.find(timer.GetClientIndex());
     if (it == m_PVRtimerMemorandum.end())
       return PVR_ERROR_INVALID_PARAMETERS;
-    PVR_TIMER newTimer = timer;
-    newTimer.iEpgUid = it->second->iEpgUid;
+    kodi::addon::PVRTimer newTimer = timer;
+    newTimer.SetEPGUid(it->second->GetEPGUid());
     entry = PVRtoTimerEntry(newTimer, true);
   }
   MythScheduleManager::MSM_ERROR ret = m_scheduleManager->UpdateTimer(entry);
@@ -2090,36 +2166,37 @@ PVR_ERROR PVRClientMythTV::UpdateTimer(const PVR_TIMER &timer)
   if (ret == MythScheduleManager::MSM_ERROR_NOT_IMPLEMENTED)
     return PVR_ERROR_NOT_IMPLEMENTED;
 
-  XBMC->Log(LOG_DEBUG,"%s: Done", __FUNCTION__);
+  kodi::Log(ADDON_LOG_DEBUG,"%s: Done", __FUNCTION__);
   return PVR_ERROR_NO_ERROR;
 }
 
-PVR_ERROR PVRClientMythTV::GetTimerTypes(PVR_TIMER_TYPE types[], int *size)
+PVR_ERROR PVRClientMythTV::GetTimerTypes(std::vector<kodi::addon::PVRTimerType>& types)
 {
-  unsigned index = 0;
   if (m_scheduleManager)
   {
     MythTimerTypeList typeList = m_scheduleManager->GetTimerTypes();
-    assert(typeList.size() <= static_cast<unsigned>(*size));
-    for (MythTimerTypeList::const_iterator it = typeList.begin(); it != typeList.end(); ++it)
-      (*it)->Fill(&types[index++]);
-    *size = index;
+    for (const auto typeEntry : typeList)
+    {
+      kodi::addon::PVRTimerType type;
+      typeEntry->Fill(type);
+      types.emplace_back(type);
+    }
     return PVR_ERROR_NO_ERROR;
   }
   //@FIXME: Returning ERROR or empty types will break PVR manager
-  memset(&types[index], 0, sizeof(PVR_TIMER_TYPE));
-  types[index].iId = 1;
-  types[index].iAttributes = PVR_TIMER_TYPE_IS_MANUAL;
-  *size = ++index;
+  kodi::addon::PVRTimerType type;
+  type.SetId(1);
+  type.SetAttributes(PVR_TIMER_TYPE_IS_MANUAL);
+  types.emplace_back(type);
   return PVR_ERROR_NO_ERROR;
 }
 
-bool PVRClientMythTV::OpenLiveStream(const PVR_CHANNEL &channel)
+bool PVRClientMythTV::OpenLiveStream(const kodi::addon::PVRChannel& channel)
 {
   if (!m_eventHandler)
     return false;
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG,"%s: channel uid: %u, num: %u", __FUNCTION__, channel.iUniqueId, channel.iChannelNumber);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG,"%s: channel uid: %u, num: %u", __FUNCTION__, channel.GetUniqueId(), channel.GetChannelNumber());
 
   // Begin critical section
   Myth::OS::CLockGuard lock(*m_lock);
@@ -2127,13 +2204,13 @@ bool PVRClientMythTV::OpenLiveStream(const PVR_CHANNEL &channel)
   Myth::ChannelList chanset;
   for (PVRChannelMap::const_iterator it = m_PVRChannelUidById.begin(); it != m_PVRChannelUidById.end(); ++it)
   {
-    if (it->second == channel.iUniqueId)
+    if (it->second == channel.GetUniqueId())
       chanset.push_back(FindChannel(it->first).GetPtr());
   }
 
   if (chanset.empty())
   {
-    XBMC->Log(LOG_ERROR,"%s: Invalid channel", __FUNCTION__);
+    kodi::Log(ADDON_LOG_ERROR,"%s: Invalid channel", __FUNCTION__);
     return false;
   }
   // Need to create live
@@ -2142,49 +2219,55 @@ bool PVRClientMythTV::OpenLiveStream(const PVR_CHANNEL &channel)
   else if (m_liveStream->IsPlaying())
     return false;
   // Configure tuning of channel
-  m_liveStream->SetTuneDelay(g_iTuneDelay);
-  m_liveStream->SetLimitTuneAttempts(g_bLimitTuneAttempts);
+  m_liveStream->SetTuneDelay(CMythSettings::GetTuneDelay());
+  m_liveStream->SetLimitTuneAttempts(CMythSettings::GetLimitTuneAttempts());
   // Try to open
   if (m_liveStream->SpawnLiveTV(chanset[0]->chanNum, chanset))
   {
-    XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Done", __FUNCTION__);
     return true;
   }
 
-  SAFE_DELETE(m_liveStream);
-  XBMC->Log(LOG_ERROR,"%s: Failed to open live stream", __FUNCTION__);
+  delete m_liveStream;
+  m_liveStream = nullptr;
+  kodi::Log(ADDON_LOG_ERROR,"%s: Failed to open live stream", __FUNCTION__);
   // Open the dummy stream 'CHANNEL UNAVAILABLE'
   if (!m_dummyStream)
-    m_dummyStream = new FileStreaming(g_szClientPath + PATH_SEPARATOR_STRING + "resources" + PATH_SEPARATOR_STRING + "channel_unavailable.ts");
+    m_dummyStream = new FileStreaming(ClientPath() + PATH_SEPARATOR_STRING + "resources" + PATH_SEPARATOR_STRING + "channel_unavailable.ts");
   if (m_dummyStream && m_dummyStream->IsValid())
   {
     return true;
   }
-  SAFE_DELETE(m_dummyStream);
-  XBMC->QueueNotification(QUEUE_WARNING, XBMC->GetLocalizedString(30305)); // Channel unavailable
+  delete m_dummyStream;
+  m_dummyStream = nullptr;
+  kodi::QueueNotification(QUEUE_WARNING, "", kodi::GetLocalizedString(30305)); // Channel unavailable
   return false;
 }
 
 void PVRClientMythTV::CloseLiveStream()
 {
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   // Begin critical section
   Myth::OS::CLockGuard lock(*m_lock);
   // Destroy my stream
-  SAFE_DELETE(m_liveStream);
-  SAFE_DELETE(m_dummyStream);
+  delete m_liveStream;
+  m_liveStream = nullptr;
+  delete m_dummyStream;
+  m_dummyStream = nullptr;
 
   // Reset stop request
   m_stopTV = false;
 
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Done", __FUNCTION__);
 }
 
 int PVRClientMythTV::ReadLiveStream(unsigned char *pBuffer, unsigned int iBufferSize)
 {
+  int dataread = 0;
+
   // Keep unlocked
   if (m_stopTV)
   {
@@ -2193,17 +2276,24 @@ int PVRClientMythTV::ReadLiveStream(unsigned char *pBuffer, unsigned int iBuffer
   else
   {
     if (m_liveStream)
-      return m_liveStream->Read(pBuffer, iBufferSize);
-    if (m_dummyStream)
-      return m_dummyStream->Read(pBuffer, iBufferSize);
+      dataread = m_liveStream->Read(pBuffer, iBufferSize);
+    else if (m_dummyStream)
+      dataread = m_dummyStream->Read(pBuffer, iBufferSize);
   }
-  return 0;
+
+  if (dataread < 0)
+  {
+    kodi::Log(ADDON_LOG_ERROR,"%s: Failed to read liveStream. Errorcode: %d!", __FUNCTION__, dataread);
+    dataread = 0;
+  }
+
+  return dataread;
 }
 
-long long PVRClientMythTV::SeekLiveStream(long long iPosition, int iWhence)
+int64_t PVRClientMythTV::SeekLiveStream(int64_t iPosition, int iWhence)
 {
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: pos: %lld, whence: %d", __FUNCTION__, iPosition, iWhence);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: pos: %lld, whence: %d", __FUNCTION__, iPosition, iWhence);
 
   Myth::WHENCE_t whence;
   switch (iWhence)
@@ -2221,43 +2311,43 @@ long long PVRClientMythTV::SeekLiveStream(long long iPosition, int iWhence)
     return -1;
   }
 
-  long long retval;
+  int64_t retval;
   if (m_liveStream)
-    retval = (long long) m_liveStream->Seek((int64_t)iPosition, whence);
+    retval = (int64_t) m_liveStream->Seek((int64_t)iPosition, whence);
   else if (m_dummyStream)
-    retval = (long long) m_dummyStream->Seek((int64_t)iPosition, whence);
+    retval = (int64_t) m_dummyStream->Seek((int64_t)iPosition, whence);
   else
     return -1;
 
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: Done - position: %lld", __FUNCTION__, retval);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Done - position: %lld", __FUNCTION__, retval);
 
   return retval;
 }
 
-long long PVRClientMythTV::LengthLiveStream()
+int64_t PVRClientMythTV::LengthLiveStream()
 {
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
-  long long retval;
+  int64_t retval;
   if (m_liveStream)
-    retval = (long long) m_liveStream->GetSize();
+    retval = (int64_t) m_liveStream->GetSize();
   else if (m_dummyStream)
-    retval = (long long) m_dummyStream->GetSize();
+    retval = (int64_t) m_dummyStream->GetSize();
   else
     return -1;
 
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: Done - duration: %lld", __FUNCTION__, retval);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Done - duration: %lld", __FUNCTION__, retval);
 
   return retval;
 }
 
-PVR_ERROR PVRClientMythTV::GetSignalStatus(PVR_SIGNAL_STATUS *signalStatus)
+PVR_ERROR PVRClientMythTV::GetSignalStatus(int channelUid, kodi::addon::PVRSignalStatus& signalStatus)
 {
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   Myth::OS::CLockGuard lock(*m_lock);
   if (!m_liveStream)
@@ -2265,27 +2355,27 @@ PVR_ERROR PVRClientMythTV::GetSignalStatus(PVR_SIGNAL_STATUS *signalStatus)
 
   char buf[50];
   sprintf(buf, "Myth Recorder %u", (unsigned)m_liveStream->GetCardId());
-  PVR_STRCPY(signalStatus->strAdapterName, buf);
+  signalStatus.SetAdapterName(buf);
   Myth::SignalStatusPtr signal = m_liveStream->GetSignal();
   if (signal)
   {
     if (signal->lock)
-      PVR_STRCPY(signalStatus->strAdapterStatus, "Locked");
+      signalStatus.SetAdapterStatus("Locked");
     else
-      PVR_STRCPY(signalStatus->strAdapterStatus, "No lock");
-    signalStatus->iSignal = signal->signal;
-    signalStatus->iBER = signal->ber;
-    signalStatus->iSNR = signal->snr;
-    signalStatus->iUNC = signal->ucb;
+      signalStatus.SetAdapterStatus("No lock");
+    signalStatus.SetSignal(signal->signal);
+    signalStatus.SetBER(signal->ber);
+    signalStatus.SetSNR(signal->snr);
+    signalStatus.SetUNC(signal->ucb);
   }
 
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Done", __FUNCTION__);
 
   return PVR_ERROR_NO_ERROR;
 }
 
-PVR_ERROR PVRClientMythTV::GetStreamTimes(PVR_STREAM_TIMES* pStreamTimes)
+PVR_ERROR PVRClientMythTV::GetStreamTimes(kodi::addon::PVRStreamTimes& streamTimes)
 {
   time_t begTs, endTs;
   {
@@ -2299,13 +2389,13 @@ PVR_ERROR PVRClientMythTV::GetStreamTimes(PVR_STREAM_TIMES* pStreamTimes)
         return PVR_ERROR_REJECTED;
       begTs = m_liveStream->GetLiveTimeStart();
       endTs = m_liveStream->GetChainedProgram(seq)->recording.endTs;
-      pStreamTimes->startTime = begTs;
+      streamTimes.SetStartTime(begTs);
     }
     else if (m_recordingStream && !m_recordingStreamInfo.IsNull())
     {
       begTs = m_recordingStreamInfo.RecordingStartTime();
       endTs = m_recordingStreamInfo.RecordingEndTime();
-      pStreamTimes->startTime = 0; // for recordings, this must be zero
+      streamTimes.SetStartTime(0); // for recordings, this must be zero
     }
     else
     {
@@ -2315,34 +2405,34 @@ PVR_ERROR PVRClientMythTV::GetStreamTimes(PVR_STREAM_TIMES* pStreamTimes)
   time_t now = time(NULL);
   if (now < endTs)
     endTs = now;
-  pStreamTimes->ptsStart = 0; // it is started from 0 by the ffmpeg demuxer
-  pStreamTimes->ptsBegin = 0; // earliest pts player can seek back
-  pStreamTimes->ptsEnd = static_cast<int64_t>(difftime(endTs, begTs)) * DVD_TIME_BASE;
+  streamTimes.SetPTSStart(0); // it is started from 0 by the ffmpeg demuxer
+  streamTimes.SetPTSBegin(0); // earliest pts player can seek back
+  streamTimes.SetPTSEnd(static_cast<int64_t>(difftime(endTs, begTs)) * DVD_TIME_BASE);
   return PVR_ERROR_NO_ERROR;
 }
 
-bool PVRClientMythTV::OpenRecordedStream(const PVR_RECORDING &recording)
+bool PVRClientMythTV::OpenRecordedStream(const kodi::addon::PVRRecording& recording)
 {
   if (!m_control || !m_eventHandler)
     return false;
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: title: %s, ID: %s, duration: %d", __FUNCTION__, recording.strTitle, recording.strRecordingId, recording.iDuration);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: title: %s, ID: %s, duration: %d", __FUNCTION__, recording.GetTitle().c_str(), recording.GetRecordingId().c_str(), recording.GetDuration());
 
   // Begin critical section
   Myth::OS::CLockGuard lock(*m_lock);
   if (m_recordingStream)
   {
-    XBMC->Log(LOG_INFO, "%s: Recorded stream is busy", __FUNCTION__);
+    kodi::Log(ADDON_LOG_INFO, "%s: Recorded stream is busy", __FUNCTION__);
     return false;
   }
 
   MythProgramInfo prog;
   {
     Myth::OS::CLockGuard lock(*m_recordingsLock);
-    ProgramInfoMap::iterator it = m_recordings.find(recording.strRecordingId);
+    ProgramInfoMap::iterator it = m_recordings.find(recording.GetRecordingId());
     if (it == m_recordings.end())
     {
-      XBMC->Log(LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.strRecordingId);
+      kodi::Log(ADDON_LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.GetRecordingId().c_str());
       return false;
     }
     prog = it->second;
@@ -2353,12 +2443,12 @@ bool PVRClientMythTV::OpenRecordedStream(const PVR_RECORDING &recording)
     // Request the stream from our master using the opened event handler.
     m_recordingStream = new Myth::RecordingPlayback(*m_eventHandler);
     if (!m_recordingStream->IsOpen())
-      XBMC->QueueNotification(QUEUE_ERROR, XBMC->GetLocalizedString(30302)); // MythTV backend unavailable
+      kodi::QueueNotification(QUEUE_ERROR, "", kodi::GetLocalizedString(30302)); // MythTV backend unavailable
     else if (m_recordingStream->OpenTransfer(prog.GetPtr()))
     {
       m_recordingStreamInfo = prog;
-      if (g_bExtraDebug)
-        XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
+      if (CMythSettings::GetExtraDebug())
+        kodi::Log(ADDON_LOG_DEBUG, "%s: Done", __FUNCTION__);
       // Fill AV info for later use
       FillRecordingAVInfo(prog, m_recordingStream);
       return true;
@@ -2371,20 +2461,21 @@ bool PVRClientMythTV::OpenRecordedStream(const PVR_RECORDING &recording)
     Myth::SettingPtr mbo = m_control->GetSetting("MasterBackendOverride", false);
     if (mbo && mbo->value == "1")
     {
-      XBMC->Log(LOG_INFO, "%s: Option 'MasterBackendOverride' is enabled", __FUNCTION__);
+      kodi::Log(ADDON_LOG_INFO, "%s: Option 'MasterBackendOverride' is enabled", __FUNCTION__);
       m_recordingStream = new Myth::RecordingPlayback(*m_eventHandler);
       if (m_recordingStream->IsOpen() && m_recordingStream->OpenTransfer(prog.GetPtr()))
       {
         m_recordingStreamInfo = prog;
-        if (g_bExtraDebug)
-          XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
+        if (CMythSettings::GetExtraDebug())
+          kodi::Log(ADDON_LOG_DEBUG, "%s: Done", __FUNCTION__);
         // Fill AV info for later use
         FillRecordingAVInfo(prog, m_recordingStream);
         return true;
       }
-      SAFE_DELETE(m_recordingStream);
-      XBMC->Log(LOG_INFO, "%s: Failed to open recorded stream from master backend", __FUNCTION__);
-      XBMC->Log(LOG_INFO, "%s: You should uncheck option 'MasterBackendOverride' from MythTV setup", __FUNCTION__);
+      delete m_recordingStream;
+      m_recordingStream = nullptr;
+      kodi::Log(ADDON_LOG_INFO, "%s: Failed to open recorded stream from master backend", __FUNCTION__);
+      kodi::Log(ADDON_LOG_INFO, "%s: You should uncheck option 'MasterBackendOverride' from MythTV setup", __FUNCTION__);
     }
     // Query backend server IP
     std::string backend_addr(m_control->GetBackendServerIP6(prog.HostName()));
@@ -2395,43 +2486,45 @@ bool PVRClientMythTV::OpenRecordedStream(const PVR_RECORDING &recording)
     // Query backend server port
     unsigned backend_port(m_control->GetBackendServerPort(prog.HostName()));
     if (!backend_port)
-      backend_port = (unsigned)g_iProtoPort;
+      backend_port = (unsigned)CMythSettings::GetProtoPort();
     // Request the stream from slave host. A dedicated event handler will be opened.
-    XBMC->Log(LOG_INFO, "%s: Connect to remote backend %s:%u", __FUNCTION__, backend_addr.c_str(), backend_port);
+    kodi::Log(ADDON_LOG_INFO, "%s: Connect to remote backend %s:%u", __FUNCTION__, backend_addr.c_str(), backend_port);
     m_recordingStream = new Myth::RecordingPlayback(backend_addr, backend_port);
     if (!m_recordingStream->IsOpen())
-      XBMC->QueueNotification(QUEUE_ERROR, XBMC->GetLocalizedString(30302)); // MythTV backend unavailable
+      kodi::QueueNotification(QUEUE_ERROR, "", kodi::GetLocalizedString(30302)); // MythTV backend unavailable
     else if (m_recordingStream->OpenTransfer(prog.GetPtr()))
     {
       m_recordingStreamInfo = prog;
-      if (g_bExtraDebug)
-        XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
+      if (CMythSettings::GetExtraDebug())
+        kodi::Log(ADDON_LOG_DEBUG, "%s: Done", __FUNCTION__);
       // Fill AV info for later use
       FillRecordingAVInfo(prog, m_recordingStream);
       return true;
     }
   }
 
-  SAFE_DELETE(m_recordingStream);
-  XBMC->Log(LOG_ERROR,"%s: Failed to open recorded stream", __FUNCTION__);
+  delete m_recordingStream;
+  m_recordingStream = nullptr;
+  kodi::Log(ADDON_LOG_ERROR,"%s: Failed to open recorded stream", __FUNCTION__);
   return false;
 }
 
 void PVRClientMythTV::CloseRecordedStream()
 {
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   // Begin critical section
   Myth::OS::CLockGuard lock(*m_lock);
 
   // Destroy my stream
-  SAFE_DELETE(m_recordingStream);
+  delete m_recordingStream;
+  m_recordingStream = nullptr;
   // Reset my info
   m_recordingStreamInfo = MythProgramInfo();
 
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Done", __FUNCTION__);
 }
 
 int PVRClientMythTV::ReadRecordedStream(unsigned char *pBuffer, unsigned int iBufferSize)
@@ -2440,10 +2533,13 @@ int PVRClientMythTV::ReadRecordedStream(unsigned char *pBuffer, unsigned int iBu
   return (m_recordingStream ? m_recordingStream->Read(pBuffer, iBufferSize) : -1);
 }
 
-long long PVRClientMythTV::SeekRecordedStream(long long iPosition, int iWhence)
+int64_t PVRClientMythTV::SeekRecordedStream(int64_t iPosition, int iWhence)
 {
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: pos: %lld, whence: %d", __FUNCTION__, iPosition, iWhence);
+  if (iWhence == SEEK_POSSIBLE)
+    return 1;
+
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: pos: %lld, whence: %d", __FUNCTION__, iPosition, iWhence);
 
   if (!m_recordingStream)
     return -1;
@@ -2464,49 +2560,96 @@ long long PVRClientMythTV::SeekRecordedStream(long long iPosition, int iWhence)
     return -1;
   }
 
-  long long retval = (long long) m_recordingStream->Seek((int64_t)iPosition, whence);
+  int64_t retval = (int64_t) m_recordingStream->Seek((int64_t)iPosition, whence);
   // PVR API needs zero when seeking beyond the end
   if (retval < 0 && m_recordingStream->GetSize() > 0)
     retval = 0;
 
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: Done - position: %lld", __FUNCTION__, retval);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Done - position: %lld", __FUNCTION__, retval);
 
   return retval;
 }
 
-long long PVRClientMythTV::LengthRecordedStream()
+int64_t PVRClientMythTV::LengthRecordedStream()
 {
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s", __FUNCTION__);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s", __FUNCTION__);
 
   if (!m_recordingStream)
     return -1;
 
-  long long retval = (long long) m_recordingStream->GetSize();
+  int64_t retval = (int64_t) m_recordingStream->GetSize();
 
-  if (g_bExtraDebug)
-    XBMC->Log(LOG_DEBUG, "%s: Done - duration: %lld", __FUNCTION__, retval);
+  if (CMythSettings::GetExtraDebug())
+    kodi::Log(ADDON_LOG_DEBUG, "%s: Done - duration: %lld", __FUNCTION__, retval);
 
   return retval;
 }
 
-PVR_ERROR PVRClientMythTV::CallMenuHook(const PVR_MENUHOOK &menuhook, const PVR_MENUHOOK_DATA &item)
+PVR_ERROR PVRClientMythTV::CallChannelMenuHook(const kodi::addon::PVRMenuhook& menuhook, const kodi::addon::PVRChannel& item)
 {
-  if (!m_control)
-    return PVR_ERROR_SERVER_ERROR;
-
-  if (menuhook.iHookId == MENUHOOK_REC_DELETE_AND_RERECORD && item.cat == PVR_MENUHOOK_RECORDING) {
-    return DeleteAndForgetRecording(item.data.recording);
+  if (menuhook.GetHookId() == MENUHOOK_TRIGGER_CHANNEL_UPDATE)
+  {
+    kodi::addon::CInstancePVRClient::TriggerChannelUpdate();
+    return PVR_ERROR_NO_ERROR;
   }
 
-  if (menuhook.iHookId == MENUHOOK_KEEP_RECORDING && item.cat == PVR_MENUHOOK_RECORDING)
+  return PVR_ERROR_NOT_IMPLEMENTED;
+}
+
+PVR_ERROR PVRClientMythTV::CallEPGMenuHook(const kodi::addon::PVRMenuhook& menuhook, const kodi::addon::PVREPGTag& tag)
+{
+  time_t attime;
+  unsigned int chanid;
+  MythEPGInfo::BreakBroadcastID(tag.GetUniqueBroadcastId(), &chanid, &attime);
+  MythEPGInfo epgInfo;
+  Myth::ProgramMapPtr epg = m_control->GetProgramGuide(chanid, attime, attime);
+  Myth::ProgramMap::reverse_iterator epgit = epg->rbegin(); // Get last found
+  if (epgit != epg->rend())
+  {
+    epgInfo = MythEPGInfo(epgit->second);
+    if (CMythSettings::GetExtraDebug())
+      kodi::Log(ADDON_LOG_DEBUG, "%s: Found EPG program (%d) chanid: %u attime: %lu", __FUNCTION__, tag.GetUniqueBroadcastId(), chanid, attime);
+
+    if (menuhook.GetHookId() == MENUHOOK_INFO_EPG)
+    {
+      std::vector<std::string> items(8);
+      items[0] = "BID " + std::to_string(tag.GetUniqueBroadcastId());
+      items[1] = Myth::TimeToString(epgInfo.StartTime());
+      items[2] = Myth::TimeToString(epgInfo.EndTime());
+      items[3] = epgInfo.ChannelName();
+      items[4] = epgInfo.ChannelNumber();
+      items[5] = epgInfo.Category();
+      items[6] = epgInfo.CategoryType();
+      items[7] = epgInfo.SeriesID();
+
+      return PVR_ERROR_NO_ERROR;
+    }
+  }
+  else
+  {
+    kodi::QueueNotification(QUEUE_WARNING, "", kodi::GetLocalizedString(30312));
+    kodi::Log(ADDON_LOG_DEBUG, "%s: EPG program not found (%d) chanid: %u attime: %lu", __FUNCTION__, tag.GetUniqueBroadcastId(), chanid, attime);
+    return PVR_ERROR_INVALID_PARAMETERS;
+  }
+  return PVR_ERROR_FAILED;
+}
+
+PVR_ERROR PVRClientMythTV::CallRecordingMenuHook(const kodi::addon::PVRMenuhook& menuhook, const kodi::addon::PVRRecording& item)
+{
+  if (menuhook.GetHookId() == MENUHOOK_REC_DELETE_AND_RERECORD)
+  {
+    return DeleteAndForgetRecording(item);
+  }
+
+  if (menuhook.GetHookId() == MENUHOOK_KEEP_RECORDING)
   {
     Myth::OS::CLockGuard lock(*m_recordingsLock);
-    ProgramInfoMap::iterator it = m_recordings.find(item.data.recording.strRecordingId);
+    ProgramInfoMap::iterator it = m_recordings.find(item.GetRecordingId());
     if (it == m_recordings.end())
     {
-      XBMC->Log(LOG_ERROR,"%s: Recording not found", __FUNCTION__);
+      kodi::Log(ADDON_LOG_ERROR,"%s: Recording not found", __FUNCTION__);
       return PVR_ERROR_INVALID_PARAMETERS;
     }
 
@@ -2523,24 +2666,24 @@ PVR_ERROR PVRClientMythTV::CallMenuHook(const PVR_MENUHOOK &menuhook, const PVR_
     {
       if (m_control->UndeleteRecording(*(it->second.GetPtr())))
       {
-        std::string info = XBMC->GetLocalizedString(menuhook.iLocalizedStringId);
+        std::string info = kodi::GetLocalizedString(menuhook.GetLocalizedStringId());
         info.append(": ").append(it->second.Title());
-        XBMC->QueueNotification(QUEUE_INFO, info.c_str());
+        kodi::QueueNotification(QUEUE_INFO, "", info);
         return PVR_ERROR_NO_ERROR;
       }
     }
     return PVR_ERROR_FAILED;
   }
 
-  if (menuhook.iHookId == MENUHOOK_INFO_RECORDING && item.cat == PVR_MENUHOOK_RECORDING)
+  if (menuhook.GetHookId() == MENUHOOK_INFO_RECORDING)
   {
     MythProgramInfo pinfo;
     {
       Myth::OS::CLockGuard lock(*m_recordingsLock);
-      ProgramInfoMap::iterator it = m_recordings.find(item.data.recording.strRecordingId);
+      ProgramInfoMap::iterator it = m_recordings.find(item.GetRecordingId());
       if (it == m_recordings.end())
       {
-        XBMC->Log(LOG_ERROR,"%s: Recording not found", __FUNCTION__);
+        kodi::Log(ADDON_LOG_ERROR,"%s: Recording not found", __FUNCTION__);
         return PVR_ERROR_INVALID_PARAMETERS;
       }
       pinfo = it->second;
@@ -2548,27 +2691,25 @@ PVR_ERROR PVRClientMythTV::CallMenuHook(const PVR_MENUHOOK &menuhook, const PVR_
     if (pinfo.IsNull())
       return PVR_ERROR_REJECTED;
 
-    const unsigned sz = 12;
-    std::string items[sz];
-    const char* entries[sz];
-    items[0].append("Status : [COLOR ").append(g_szDamagedColor).append("]")
+    std::vector<std::string> items(12);
+    items[0].append("Status : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
             .append(Myth::RecStatusToString(m_control->CheckService(), pinfo.Status())).append("[/COLOR]");
-    items[1].append("RecordID : [COLOR ").append(g_szDamagedColor).append("]")
+    items[1].append("RecordID : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
             .append(Myth::IdToString(pinfo.RecordID())).append("[/COLOR]");
-    items[2].append("StartTime : [COLOR ").append(g_szDamagedColor).append("]")
+    items[2].append("StartTime : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
             .append(Myth::TimeToString(pinfo.RecordingStartTime())).append("[/COLOR]");
-    items[3].append("EndTime : [COLOR ").append(g_szDamagedColor).append("]")
+    items[3].append("EndTime : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
             .append(Myth::TimeToString(pinfo.RecordingEndTime())).append("[/COLOR]");
-    items[4].append("ChannelName : [COLOR ").append(g_szDamagedColor).append("]")
+    items[4].append("ChannelName : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
             .append(pinfo.ChannelName()).append("[/COLOR]");
-    items[5].append("FileName : [COLOR ").append(g_szDamagedColor).append("]")
+    items[5].append("FileName : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
             .append(pinfo.FileName()).append("[/COLOR]");
-    items[6].append("StorageGroup : [COLOR ").append(g_szDamagedColor).append("]")
+    items[6].append("StorageGroup : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
             .append(pinfo.StorageGroup()).append("[/COLOR]");
-    items[7].append("HostName : [COLOR ").append(g_szDamagedColor).append("]")
+    items[7].append("HostName : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
             .append(pinfo.HostName()).append("[/COLOR]");
 
-    items[8].append("ProgramFlags : [COLOR ").append(g_szDamagedColor).append("]");
+    items[8].append("ProgramFlags : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]");
     unsigned pf = pinfo.GetPtr()->programFlags;
     items[8].append((pf & 0x00001) ? "0 " : "");
     items[8].append((pf & 0x00002) ? "1 " : "");
@@ -2590,7 +2731,7 @@ PVR_ERROR PVRClientMythTV::CallMenuHook(const PVR_MENUHOOK &menuhook, const PVR_
     items[8].append((pf & 0x20000) ? "H " : "");
     items[8].append("[/COLOR]");
 
-    items[9].append("AudioProps : [COLOR ").append(g_szDamagedColor).append("]");
+    items[9].append("AudioProps : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]");
     unsigned ap = pinfo.GetPtr()->audioProps;
     items[9].append((ap & 0x01) ? "0 " : "");
     items[9].append((ap & 0x02) ? "1 " : "");
@@ -2600,7 +2741,7 @@ PVR_ERROR PVRClientMythTV::CallMenuHook(const PVR_MENUHOOK &menuhook, const PVR_
     items[9].append((ap & 0x20) ? "5 " : "");
     items[9].append("[/COLOR]");
 
-    items[10].append("VideoProps : [COLOR ").append(g_szDamagedColor).append("]");
+    items[10].append("VideoProps : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]");
     unsigned vp = pinfo.GetPtr()->videoProps;
     items[10].append((vp & 0x01) ? "0 " : "");
     items[10].append((vp & 0x02) ? "1 " : "");
@@ -2611,112 +2752,54 @@ PVR_ERROR PVRClientMythTV::CallMenuHook(const PVR_MENUHOOK &menuhook, const PVR_
     items[10].append((vp & 0x40) ? "6 " : "");
     items[10].append("[/COLOR]");
 
-    items[11].append("FrameRate : [COLOR ").append(g_szDamagedColor).append("]");
+    items[11].append("FrameRate : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]");
     if (pinfo.GetPropsVideoFrameRate() > 0.0)
       items[11].append(std::to_string(pinfo.GetPropsVideoFrameRate()));
     items[11].append("[/COLOR]");
 
-    for (unsigned i = 0; i < sz; ++i)
-      entries[i] = items[i].c_str();
-    GUI->Dialog_Select(item.data.recording.strTitle, entries, sz);
+    kodi::gui::dialogs::Select::Show(item.GetTitle(), items);
 
     return PVR_ERROR_NO_ERROR;
   }
 
-  if (menuhook.category == PVR_MENUHOOK_TIMER)
+  return PVR_ERROR_NOT_IMPLEMENTED;
+}
+
+PVR_ERROR PVRClientMythTV::CallTimerMenuHook(const kodi::addon::PVRMenuhook& menuhook, const kodi::addon::PVRTimer& item)
+{
+  if (menuhook.GetHookId() == MENUHOOK_TIMER_BACKEND_INFO && m_scheduleManager)
   {
-    if (menuhook.iHookId == MENUHOOK_TIMER_BACKEND_INFO && m_scheduleManager && item.cat == PVR_MENUHOOK_TIMER)
+    MythScheduledPtr prog = m_scheduleManager->FindUpComingByIndex(item.GetClientIndex());
+    if (!prog)
     {
-      MythScheduledPtr prog = m_scheduleManager->FindUpComingByIndex(item.data.timer.iClientIndex);
-      if (!prog)
-      {
-        MythScheduleList progs = m_scheduleManager->FindUpComingByRuleId(item.data.timer.iClientIndex);
-        if (progs.end() != progs.begin())
-          prog = progs.begin()->second;
-      }
-      if (prog)
-      {
-        const unsigned sz = 4;
-        std::string items[sz];
-        const char* entries[sz];
-        items[0].append("Status : [COLOR ").append(g_szDamagedColor).append("]")
-                .append(Myth::RecStatusToString(m_control->CheckService(), prog->Status())).append("[/COLOR]");
-        items[1].append("RecordID : [COLOR ").append(g_szDamagedColor).append("]")
-                .append(Myth::IdToString(prog->RecordID())).append("[/COLOR]");
-        items[2].append("StartTime : [COLOR ").append(g_szDamagedColor).append("]")
-                .append(Myth::TimeToString(prog->RecordingStartTime())).append("[/COLOR]");
-        items[3].append("EndTime : [COLOR ").append(g_szDamagedColor).append("]")
-                .append(Myth::TimeToString(prog->RecordingEndTime())).append("[/COLOR]");
-        for (unsigned i = 0; i < sz; ++i)
-          entries[i] = items[i].c_str();
-        GUI->Dialog_Select(item.data.timer.strTitle, entries, sz);
-      }
-      return PVR_ERROR_NO_ERROR;
+      MythScheduleList progs = m_scheduleManager->FindUpComingByRuleId(item.GetClientIndex());
+      if (progs.end() != progs.begin())
+        prog = progs.begin()->second;
     }
-    else if (menuhook.iHookId == MENUHOOK_SHOW_HIDE_NOT_RECORDING && m_scheduleManager)
+    if (prog)
     {
-      bool flag = m_scheduleManager->ToggleShowNotRecording();
-      HandleScheduleChange();
-      std::string info = (flag ? XBMC->GetLocalizedString(30310) : XBMC->GetLocalizedString(30311)); //Enabled / Disabled
-      info += ": ";
-      info += XBMC->GetLocalizedString(30421); //Show/hide rules with status 'Not Recording'
-      XBMC->QueueNotification(QUEUE_INFO, info.c_str());
-      return PVR_ERROR_NO_ERROR;
+      std::vector<std::string> items(4);
+      items[0].append("Status : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
+              .append(Myth::RecStatusToString(m_control->CheckService(), prog->Status())).append("[/COLOR]");
+      items[1].append("RecordID : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
+              .append(Myth::IdToString(prog->RecordID())).append("[/COLOR]");
+      items[2].append("StartTime : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
+              .append(Myth::TimeToString(prog->RecordingStartTime())).append("[/COLOR]");
+      items[3].append("EndTime : [COLOR ").append(CMythSettings::GetDamagedColor()).append("]")
+              .append(Myth::TimeToString(prog->RecordingEndTime())).append("[/COLOR]");
+      kodi::gui::dialogs::Select::Show(item.GetTitle(), items);
     }
+    return PVR_ERROR_NO_ERROR;
   }
-
-  if (menuhook.category == PVR_MENUHOOK_CHANNEL)
+  else if (menuhook.GetHookId() == MENUHOOK_SHOW_HIDE_NOT_RECORDING && m_scheduleManager)
   {
-    if (menuhook.iHookId == MENUHOOK_TRIGGER_CHANNEL_UPDATE)
-    {
-      PVR->TriggerChannelUpdate();
-      return PVR_ERROR_NO_ERROR;
-    }
-  }
-
-  if (menuhook.category == PVR_MENUHOOK_EPG && item.cat == PVR_MENUHOOK_EPG)
-  {
-    time_t attime;
-    unsigned int chanid;
-    MythEPGInfo::BreakBroadcastID(item.data.iEpgUid, &chanid, &attime);
-    MythEPGInfo epgInfo;
-    Myth::ProgramMapPtr epg = m_control->GetProgramGuide(chanid, attime, attime);
-    Myth::ProgramMap::reverse_iterator epgit = epg->rbegin(); // Get last found
-    if (epgit != epg->rend())
-    {
-      epgInfo = MythEPGInfo(epgit->second);
-      if (g_bExtraDebug)
-        XBMC->Log(LOG_DEBUG, "%s: Found EPG program (%d) chanid: %u attime: %lu", __FUNCTION__, item.data.iEpgUid, chanid, attime);
-
-      if (menuhook.iHookId == MENUHOOK_INFO_EPG)
-      {
-        const unsigned sz = 8;
-        std::string items[sz];
-        const char* entries[sz];
-        items[0] = "BID " + std::to_string((unsigned)item.data.iEpgUid);
-        items[1] = Myth::TimeToString(epgInfo.StartTime());
-        items[2] = Myth::TimeToString(epgInfo.EndTime());
-        items[3] = epgInfo.ChannelName();
-        items[4] = epgInfo.ChannelNumber();
-        items[5] = epgInfo.Category();
-        items[6] = epgInfo.CategoryType();
-        items[7] = epgInfo.SeriesID();
-
-        for (unsigned i = 0; i < sz; ++i)
-          entries[i] = items[i].c_str();
-        GUI->Dialog_Select(epgInfo.Title().c_str(), entries, sz);
-
-        return PVR_ERROR_NO_ERROR;
-      }
-
-    }
-    else
-    {
-      XBMC->QueueNotification(QUEUE_WARNING, XBMC->GetLocalizedString(30312));
-      XBMC->Log(LOG_DEBUG, "%s: EPG program not found (%d) chanid: %u attime: %lu", __FUNCTION__, item.data.iEpgUid, chanid, attime);
-      return PVR_ERROR_INVALID_PARAMETERS;
-    }
-    return PVR_ERROR_FAILED;
+    bool flag = m_scheduleManager->ToggleShowNotRecording();
+    HandleScheduleChange();
+    std::string info = (flag ? kodi::GetLocalizedString(30310) : kodi::GetLocalizedString(30311)); //Enabled / Disabled
+    info += ": ";
+    info += kodi::GetLocalizedString(30421); //Show/hide rules with status 'Not Recording'
+    kodi::QueueNotification(QUEUE_INFO, "", info);
+    return PVR_ERROR_NO_ERROR;
   }
 
   return PVR_ERROR_NOT_IMPLEMENTED;
@@ -2766,7 +2849,7 @@ std::string PVRClientMythTV::MakeProgramTitle(const std::string& title, const st
 
 void PVRClientMythTV::FillRecordingAVInfo(MythProgramInfo& programInfo, Myth::Stream *stream)
 {
-  AVInfo info(stream);
+  AVInfo info(*this, stream);
   AVInfo::STREAM_AVINFO mInfo;
   if (info.GetMainStream(&mInfo))
   {
@@ -2791,7 +2874,7 @@ void PVRClientMythTV::FillRecordingAVInfo(MythProgramInfo& programInfo, Myth::St
 
 time_t PVRClientMythTV::GetRecordingTime(time_t airtt, time_t recordingtt)
 {
-  if (!g_bUseAirdate || airtt == 0)
+  if (!CMythSettings::GetUseAirdate() || airtt == 0)
     return recordingtt;
 
   /* Airdate is usually a Date, not a time.  So we include the time part from

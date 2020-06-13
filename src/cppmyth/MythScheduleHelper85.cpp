@@ -24,13 +24,11 @@
 ////
 
 #include "MythScheduleHelper85.h"
-#include "../client.h"
 #include "../tools.h"
+#include "../settings.h"
 
 #include <cstdio>
 #include <cassert>
-
-using namespace ADDON;
 
 bool MythScheduleHelper85::FillTimerEntryWithUpcoming(MythTimerEntry& entry, const MythProgramInfo& recording) const
 {
@@ -44,8 +42,8 @@ bool MythScheduleHelper85::FillTimerEntryWithUpcoming(MythTimerEntry& entry, con
     case Myth::RS_PREVIOUS_RECORDING: //Previoulsy recorded but no longer in the library
       if (!m_manager->ShowNotRecording())
       {
-        if (g_bExtraDebug)
-          XBMC->Log(LOG_DEBUG, "85::%s: Skipping %s:%s on %s because status %d", __FUNCTION__,
+        if (CMythSettings::GetExtraDebug())
+          kodi::Log(ADDON_LOG_DEBUG, "85::%s: Skipping %s:%s on %s because status %d", __FUNCTION__,
                   recording.Title().c_str(), recording.Subtitle().c_str(), recording.ChannelName().c_str(),
                   recording.Status());
         return false;

@@ -22,19 +22,21 @@
  */
 
 #include "demuxer/tsDemuxer.h"
-#include "client.h"
 
 #include <mythstream.h>
+#include <kodi/AddonBase.h>
 
 #include <set>
 #include <vector>
 
 #define AV_BUFFER_SIZE          131072
 
-class AVInfo : public TSDemux::TSDemuxer
+class PVRClientMythTV;
+
+class ATTRIBUTE_HIDDEN AVInfo : public TSDemux::TSDemuxer
 {
 public:
-  AVInfo(Myth::Stream *file);
+  AVInfo(PVRClientMythTV& client, Myth::Stream *file);
   ~AVInfo();
 
   const unsigned char* ReadAV(uint64_t pos, size_t n);
@@ -50,6 +52,7 @@ public:
   std::vector<STREAM_AVINFO> GetStreams() const;
 
 private:
+  PVRClientMythTV& m_client;
   Myth::Stream *m_file;
   uint16_t m_channel;
 

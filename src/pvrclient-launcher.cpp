@@ -21,13 +21,12 @@
 */
 
 #include "pvrclient-launcher.h"
-#include "client.h"
 #include "private/os/threads/event.h"
 #include "private/os/threads/thread.h"
 
-using namespace ADDON;
+#include <kodi/General.h>
 
-class PVRClientLauncherPrivate : private Myth::OS::CThread
+class ATTRIBUTE_HIDDEN PVRClientLauncherPrivate : private Myth::OS::CThread
 {
 public:
   PVRClientLauncherPrivate(PVRClientMythTV* client);
@@ -68,7 +67,11 @@ PVRClientLauncherPrivate::PVRClientLauncherPrivate(PVRClientMythTV* client)
 : Myth::OS::CThread()
 , m_client(client)
 {
-  PVR->ConnectionStateChange(m_client->GetBackendName(), PVR_CONNECTION_STATE_CONNECTING, m_client->GetBackendVersion());
+  std::string name;
+  std::string version;
+  m_client->GetBackendName(name);
+  m_client->GetBackendVersion(version);
+  m_client->ConnectionStateChange(name, PVR_CONNECTION_STATE_CONNECTING, version);
 }
 
 PVRClientLauncherPrivate::~PVRClientLauncherPrivate()
@@ -97,19 +100,21 @@ void* PVRClientLauncherPrivate::Process()
   {
     if (m_client->Connect())
     {
-      PVR->ConnectionStateChange(m_client->GetBackendName(), PVR_CONNECTION_STATE_CONNECTED, m_client->GetBackendVersion());
+      std::string name;
+      std::string version;
+      m_client->GetBackendName(name);
+      m_client->GetBackendVersion(version);
+      m_client->ConnectionStateChange(name, PVR_CONNECTION_STATE_CONNECTED, version);
       /* Read setting "LiveTV Priority" from backend database */
-      bool savedLiveTVPriority;
-      if (!XBMC->GetSetting("livetv_priority", &savedLiveTVPriority))
-        savedLiveTVPriority = DEFAULT_LIVETV_PRIORITY;
-      g_bLiveTVPriority = m_client->GetLiveTVPriority();
-      if (g_bLiveTVPriority != savedLiveTVPriority)
+      bool savedLiveTVPriority = kodi::GetSettingBoolean("livetv_priority", DEFAULT_LIVETV_PRIORITY);
+      CMythSettings::SetLiveTVPriority(m_client->GetLiveTVPriority());
+      if (CMythSettings::GetLiveTVPriority() != savedLiveTVPriority)
         m_client->SetLiveTVPriority(savedLiveTVPriority);
       /* End of process */
 
       // Connected.
-      std::string msg = XBMC->GetLocalizedString(30114);
-      XBMC->QueueNotification(QUEUE_INFO, msg.c_str());
+      std::string msg = kodi::GetLocalizedString(30114);
+      kodi::QueueNotification(QUEUE_INFO, "", msg);
 
       break;
     }
@@ -120,20 +125,20 @@ void* PVRClientLauncherPrivate::Process()
       if (error == PVRClientMythTV::CONN_ERROR_UNKNOWN_VERSION)
       {
         // Failed to connect the MythTV backend with the known protocol versions.
-        std::string msg = XBMC->GetLocalizedString(30300);
-        XBMC->QueueNotification(QUEUE_ERROR, msg.c_str());
+        std::string msg = kodi::GetLocalizedString(30300);
+        kodi::QueueNotification(QUEUE_ERROR, "", msg);
       }
       else if (error == PVRClientMythTV::CONN_ERROR_API_UNAVAILABLE)
       {
         // Failed to connect the API services of MythTV backend. Please check your PIN code or backend setup.
-        std::string msg = XBMC->GetLocalizedString(30301);
-        XBMC->QueueNotification(QUEUE_ERROR, msg.c_str());
+        std::string msg = kodi::GetLocalizedString(30301);
+        kodi::QueueNotification(QUEUE_ERROR, "", msg);
       }
       else
       {
         // No response from MythTV backend.
-        std::string msg = XBMC->GetLocalizedString(30304);
-        XBMC->QueueNotification(QUEUE_WARNING, msg.c_str());
+        std::string msg = kodi::GetLocalizedString(30304);
+        kodi::QueueNotification(QUEUE_WARNING, "", msg);
       }
       // No longer notify the failure
       notifyAddonFailure = false;
@@ -143,7 +148,7 @@ void* PVRClientLauncherPrivate::Process()
       m_alarm.Wait(PVRCLIENT_LAUNCHER_RETRY * 1000);
     }
   }
-  XBMC->Log(LOG_INFO, "Launcher stopped");
+  kodi::Log(ADDON_LOG_INFO, "Launcher stopped");
   // Signal the launcher has finished
   m_alarm.Broadcast();
   return 0;
