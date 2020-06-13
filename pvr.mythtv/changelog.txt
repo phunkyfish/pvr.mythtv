@@ -1,3 +1,6 @@
+v7.0.1
+- Improve hooks for recording and guide
+
 v7.0.0
 - Update PVR API 7.0.0
 - Rework addon to support new API interface
