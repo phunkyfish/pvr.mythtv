@@ -1064,13 +1064,12 @@ PVR_ERROR PVRClientMythTV::GetRecordings(kodi::addon::PVRRecordingsResultSet& re
       if (!it->second.IsLiveTV() && difftime(now, it->second.EndTime()) < INTERVAL_DAY) // Up to 1 day in the past
         tag.SetEPGEventId(MythEPGInfo::MakeBroadcastID(FindPVRChannelUid(it->second.ChannelID()), it->second.StartTime()));
 
-      // Unimplemented
       tag.SetLifetime(0);
       tag.SetPriority(0);
       tag.SetPlotOutline("");
       tag.SetSizeInBytes(it->second.FileSize());
       unsigned int flags = PVR_RECORDING_FLAG_UNDEFINED;
-      if (!it->second.GetPropsSerie())
+      if (it->second.GetPropsSerie())
         flags |= PVR_RECORDING_FLAG_IS_SERIES;
       tag.SetFlags(flags);
 
@@ -1188,12 +1187,14 @@ PVR_ERROR PVRClientMythTV::GetDeletedRecordings(kodi::addon::PVRRecordingsResult
       tag.SetThumbnailPath(strThumbnailPath);
       tag.SetFanartPath(strFanartPath);
 
-      // Unimplemented
       tag.SetLifetime(0);
       tag.SetPriority(0);
       tag.SetPlotOutline("");
       tag.SetSizeInBytes(it->second.FileSize());
-      tag.SetFlags(PVR_RECORDING_FLAG_UNDEFINED);
+      unsigned int flags = PVR_RECORDING_FLAG_UNDEFINED;
+      if (it->second.GetPropsSerie())
+        flags |= PVR_RECORDING_FLAG_IS_SERIES;
+      tag.SetFlags(flags);
 
       results.Add(tag);
     }
