@@ -1184,7 +1184,7 @@ PVR_ERROR PVRClientMythTV::GetDeletedRecordings(kodi::addon::PVRRecordingsResult
           strFanartPath = m_artworksManager->GetArtworkPath(it->second, ArtworkManager::AWTypeFanart);
       }
       tag.SetIconPath(strIconPath);
-      tag.SetThumbnailPath(strThumbnailPath);
+      tag.SetThumbnailPath(strIconPath); // show the coverart when possible
       tag.SetFanartPath(strFanartPath);
 
       tag.SetLifetime(0);
