@@ -1,3 +1,6 @@
+v7.0.3
+ - Show coverart of recording instead the preview when possible
+
 v7.0.2
 - Improve hooks for recording and guide
 - Fix serie flag

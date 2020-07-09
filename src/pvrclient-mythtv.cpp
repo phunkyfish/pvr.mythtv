@@ -1057,7 +1057,7 @@ PVR_ERROR PVRClientMythTV::GetRecordings(kodi::addon::PVRRecordingsResultSet& re
       }
 
       tag.SetIconPath(strIconPath);
-      tag.SetThumbnailPath(strThumbnailPath);
+      tag.SetThumbnailPath(strIconPath); // show the coverart when possible
       tag.SetFanartPath(strFanartPath);
 
       // EPG Entry (Enables "Play recording" option and icon)
