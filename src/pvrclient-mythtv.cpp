@@ -351,7 +351,9 @@ void PVRClientMythTV::HandleBackendMessage(Myth::EventMessagePtr msg)
           m_control->Close();
         if (m_scheduleManager)
           m_scheduleManager->CloseControl();
-        kodi::QueueNotification(QUEUE_ERROR, "", kodi::GetLocalizedString(30302)); // Connection to MythTV backend lost
+        // notify the user when the screen is activated
+        if (!m_powerSaving)
+          kodi::QueueNotification(QUEUE_ERROR, "", kodi::GetLocalizedString(30302)); // Connection to MythTV backend lost
       }
       else if (msg->subject[0] == EVENTHANDLER_CONNECTED)
       {
@@ -362,7 +364,9 @@ void PVRClientMythTV::HandleBackendMessage(Myth::EventMessagePtr msg)
           if (m_scheduleManager)
             m_scheduleManager->OpenControl();
           m_hang = false;
-          kodi::QueueNotification(QUEUE_INFO, "", kodi::GetLocalizedString(30303)); // Connection to MythTV restored
+          // notify the user when the screen is activated
+          if (!m_powerSaving)
+            kodi::QueueNotification(QUEUE_INFO, "", kodi::GetLocalizedString(30303)); // Connection to MythTV restored
           // still in mode power saving I have to allow shutdown again
           if (m_powerSaving && CMythSettings::GetAllowMythShutdown())
             AllowBackendShutdown();
@@ -2493,7 +2497,7 @@ bool PVRClientMythTV::OpenRecordedStream(const kodi::addon::PVRRecording& record
     kodi::Log(ADDON_LOG_INFO, "%s: Connect to remote backend %s:%u", __FUNCTION__, backend_addr.c_str(), backend_port);
     m_recordingStream = new Myth::RecordingPlayback(backend_addr, backend_port);
     if (!m_recordingStream->IsOpen())
-      kodi::QueueNotification(QUEUE_ERROR, "", kodi::GetLocalizedString(30302)); // MythTV backend unavailable
+      kodi::QueueNotification(QUEUE_ERROR, "", kodi::GetLocalizedString(30304)); // No response from MythTV backend
     else if (m_recordingStream->OpenTransfer(prog.GetPtr()))
     {
       m_recordingStreamInfo = prog;
