@@ -1,3 +1,6 @@
+v7.0.5
+- Disable notification about the connection state when the screen is desactivated
+
 v7.0.4
 - Show coverart of recording instead the preview when possible
 
