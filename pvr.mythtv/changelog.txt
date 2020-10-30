@@ -1,3 +1,6 @@
+v7.2.0
+- Update PVR API 7.0.2
+
 v7.1.1
 - Fix spelling error identified by lintian
 
