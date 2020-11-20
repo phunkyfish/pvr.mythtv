@@ -2413,7 +2413,7 @@ PVR_ERROR PVRClientMythTV::GetStreamTimes(kodi::addon::PVRStreamTimes& streamTim
     endTs = now;
   streamTimes.SetPTSStart(0); // it is started from 0 by the ffmpeg demuxer
   streamTimes.SetPTSBegin(0); // earliest pts player can seek back
-  streamTimes.SetPTSEnd(static_cast<int64_t>(difftime(endTs, begTs)) * DVD_TIME_BASE);
+  streamTimes.SetPTSEnd(static_cast<int64_t>(difftime(endTs, begTs)) * STREAM_TIME_BASE);
   return PVR_ERROR_NO_ERROR;
 }
 
