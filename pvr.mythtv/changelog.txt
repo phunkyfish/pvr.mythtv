@@ -1,3 +1,6 @@
+v7.3.1
+- Implement missing methods to allow pause and seek with livestream
+
 v7.3.0
 - Update PVR API 7.1.0
 
