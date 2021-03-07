@@ -2417,6 +2417,18 @@ PVR_ERROR PVRClientMythTV::GetStreamTimes(kodi::addon::PVRStreamTimes& streamTim
   return PVR_ERROR_NO_ERROR;
 }
 
+bool PVRClientMythTV::CanPauseStream()
+{
+  // reject pause with dummy stream
+  return (m_liveStream ? true : false);
+}
+
+bool PVRClientMythTV::CanSeekStream()
+{
+  // reject seek with dummy stream
+  return (m_liveStream ? true : false);
+}
+
 bool PVRClientMythTV::OpenRecordedStream(const kodi::addon::PVRRecording& recording)
 {
   if (!m_control || !m_eventHandler)

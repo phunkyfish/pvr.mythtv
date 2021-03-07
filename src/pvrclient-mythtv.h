@@ -123,6 +123,8 @@ public:
   PVR_ERROR GetSignalStatus(int channelUid, kodi::addon::PVRSignalStatus& signalStatus) override;
   bool IsRealTimeStream() override { return m_liveStream ? true : false; }
   PVR_ERROR GetStreamTimes(kodi::addon::PVRStreamTimes& streamTimes) override;
+  bool CanPauseStream() override;
+  bool CanSeekStream() override;
 
   // Recording playback
   bool OpenRecordedStream(const kodi::addon::PVRRecording& recinfo) override;
